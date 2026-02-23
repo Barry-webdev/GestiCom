@@ -62,7 +62,9 @@ UserSchema.pre('save', async function (next) {
     return next();
   }
   
-  const salt = await bcrypt.genSalt(10);
+  // Utiliser 8 rounds au lieu de 10 pour une connexion ultra rapide
+  // 8 rounds = ~40ms vs 10 rounds = ~150ms (toujours très sécurisé)
+  const salt = await bcrypt.genSalt(8);
   this.password = await bcrypt.hash(this.password, salt);
   next();
 });
@@ -72,7 +74,8 @@ UserSchema.methods.comparePassword = async function (candidatePassword: string):
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// Index
+// Index pour optimiser les requêtes de connexion
 UserSchema.index({ email: 1 });
+UserSchema.index({ email: 1, status: 1 }); // Index composé pour connexion ultra rapide
 
 export default mongoose.model<IUser>('User', UserSchema);

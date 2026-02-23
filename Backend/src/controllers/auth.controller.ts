@@ -62,8 +62,8 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     });
   }
 
-  // Check for user
-  const user = await User.findOne({ email }).select('+password');
+  // Check for user - Optimisé avec lean() pour performance
+  const user = await User.findOne({ email }).select('+password').lean();
 
   if (!user) {
     return res.status(401).json({
@@ -72,8 +72,9 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     });
   }
 
-  // Check if password matches
-  const isMatch = await user.comparePassword(password);
+  // Check if password matches - Utilisation directe de bcrypt pour plus de rapidité
+  const bcrypt = require('bcryptjs');
+  const isMatch = await bcrypt.compare(password, user.password);
 
   if (!isMatch) {
     return res.status(401).json({

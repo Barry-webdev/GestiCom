@@ -10,6 +10,7 @@
     "start": "node dist/server.js",
     "create-admin": "ts-node src/scripts/createAdmin.ts",
     "create-test-users": "ts-node src/scripts/createTestUsers.ts",
+    "update-passwords": "ts-node src/scripts/updatePasswordHashing.ts",
     "backup": "ts-node src/scripts/backup.ts",
     "backup:list": "ts-node -e \"require('./src/scripts/backup').listBackups().forEach(b => console.log(b))\"",
     "test": "echo \"Error: no test specified\" && exit 1"

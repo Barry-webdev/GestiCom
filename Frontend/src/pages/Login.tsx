@@ -39,10 +39,17 @@ export default function Login() {
 
   const handleSubmit = async (data: LoginFormData) => {
     setIsSubmitting(true);
+    
+    // Feedback immédiat pour l'utilisateur
+    const startTime = Date.now();
+    
     try {
       const response = await authService.login(data);
       
       if (response.success) {
+        const elapsedTime = Date.now() - startTime;
+        console.log(`⚡ Connexion ultra rapide: ${elapsedTime}ms`);
+        
         showSuccessToast("Connexion réussie", `Bienvenue ${response.data.user.name}`);
         navigate("/");
       }
