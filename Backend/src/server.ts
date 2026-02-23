@@ -5,6 +5,14 @@ import dotenv from 'dotenv';
 import { connectDB } from './config/database';
 import { errorHandler } from './middleware/errorHandler';
 import { setupSwagger } from './config/swagger';
+import { 
+  generalLimiter, 
+  authLimiter, 
+  helmetConfig, 
+  requestTimeout, 
+  securityLogger,
+  payloadSizeCheck 
+} from './middleware/security';
 
 // Import routes
 import authRoutes from './routes/auth.routes';
@@ -25,7 +33,13 @@ dotenv.config();
 const app: Application = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
+// Security Middleware (DOIT ÊTRE EN PREMIER)
+app.use(helmetConfig); // Protection headers HTTP
+app.use(requestTimeout(30000)); // Timeout de 30 secondes
+app.use(securityLogger); // Logger les requêtes suspectes
+app.use(payloadSizeCheck); // Vérifier la taille des payloads
+
+// CORS
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:8080',
   credentials: true
@@ -34,14 +48,18 @@ app.use(cors({
 // Compression middleware pour réduire la taille des réponses
 app.use(compression());
 
+// Body parsing avec limite
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Rate limiting général
+app.use('/api/', generalLimiter);
 
 // Setup Swagger documentation
 setupSwagger(app);
 
-// Routes
-app.use('/api/auth', authRoutes);
+// Routes avec rate limiting spécifique
+app.use('/api/auth', authLimiter, authRoutes); // Rate limiting strict pour auth
 app.use('/api/products', productRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/suppliers', supplierRoutes);
@@ -67,6 +85,7 @@ connectDB().then(() => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📊 Environment: ${process.env.NODE_ENV}`);
     console.log(`🌐 Frontend URL: ${process.env.FRONTEND_URL}`);
+    console.log(`🔒 Security: Helmet, Rate Limiting, XSS Protection enabled`);
   });
 }).catch((error) => {
   console.error('❌ Failed to connect to database:', error);
