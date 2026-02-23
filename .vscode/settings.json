@@ -1,0 +1,20 @@
+{
+    "files.autoSave": "off",
+    "powermode.combo.threshold": 2,
+    "powermode.explosions.gifMode": "restart",
+    "powermode.enabled": true,
+    "powermode.combo.location": "statusbar",
+    "powermode.combo.counterEnabled": "show",
+    "powermode.combo.counterSize": 4,
+    "powermode.combo.timerEnabled": "show",
+    "powermode.explosions.maxExplosions": 2,
+    "powermode.presets": "flames",
+    "powermode.explosions.enabled": true,
+    "powermode.shake.enabled": true,
+    "powermode.colors": [
+        "#ff0000",
+        "#00ff00",
+        "#0000ff"
+    ],
+    "typescript.autoClosingTags": false
+}
