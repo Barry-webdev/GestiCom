@@ -26,6 +26,10 @@ export const createBackup = async (): Promise<string> => {
     }
 
     const db = mongoose.connection.db;
+    if (!db) {
+      throw new Error('Database connection not established');
+    }
+    
     const collections = await db.listCollections().toArray();
 
     // Créer un nom de fichier avec timestamp
@@ -107,6 +111,9 @@ export const restoreBackup = async (backupFile: string): Promise<void> => {
     }
 
     const db = mongoose.connection.db;
+    if (!db) {
+      throw new Error('Database connection not established');
+    }
 
     // Lire le fichier de backup
     const backupData = JSON.parse(fs.readFileSync(backupFile, 'utf-8'));
