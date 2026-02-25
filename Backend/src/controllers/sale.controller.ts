@@ -9,7 +9,7 @@ import { AuthRequest } from '../middleware/auth';
 // @route   GET /api/sales
 // @access  Private
 export const getSales = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const { search, status, startDate, endDate } = req.query;
+  const { search, status, paymentStatus, startDate, endDate } = req.query;
 
   let query: any = {};
 
@@ -24,6 +24,11 @@ export const getSales = asyncHandler(async (req: AuthRequest, res: Response) => 
   // Status filter
   if (status && status !== 'all') {
     query.status = status;
+  }
+
+  // Payment status filter
+  if (paymentStatus && paymentStatus !== 'all') {
+    query.paymentStatus = paymentStatus;
   }
 
   // Date range filter
@@ -52,7 +57,8 @@ export const getSale = asyncHandler(async (req: AuthRequest, res: Response) => {
   const sale = await Sale.findById(req.params.id)
     .populate('client', 'name phone address email')
     .populate('user', 'name email')
-    .populate('items.product', 'name category');
+    .populate('items.product', 'name category')
+    .populate('payments.user', 'name');
 
   if (!sale) {
     return res.status(404).json({
@@ -71,7 +77,7 @@ export const getSale = asyncHandler(async (req: AuthRequest, res: Response) => {
 // @route   POST /api/sales
 // @access  Private (admin, gestionnaire, vendeur)
 export const createSale = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const { client, items, paymentMethod, notes } = req.body;
+  const { client, items, initialPayment, paymentMethod, dueDate, notes } = req.body;
 
   // Vérifier le client
   const clientDoc = await Client.findById(client);
@@ -120,13 +126,38 @@ export const createSale = asyncHandler(async (req: AuthRequest, res: Response) =
     await product.save();
   }
 
-  const tax = 0; // Pas de taxe pour l'instant
+  const tax = 0;
   const total = subtotal + tax;
+  const amountPaid = initialPayment || 0;
+  const amountDue = total - amountPaid;
+
+  // Déterminer le statut de paiement
+  let paymentStatus: 'paid' | 'partial' | 'unpaid';
+  if (amountPaid >= total) {
+    paymentStatus = 'paid';
+  } else if (amountPaid > 0) {
+    paymentStatus = 'partial';
+  } else {
+    paymentStatus = 'unpaid';
+  }
 
   // Générer le saleId
   const year = new Date().getFullYear();
   const count = await Sale.countDocuments();
   const saleId = `VNT-${year}-${String(count + 1).padStart(4, '0')}`;
+
+  // Créer le tableau de paiements
+  const payments = [];
+  if (amountPaid > 0) {
+    payments.push({
+      amount: amountPaid,
+      paymentMethod,
+      date: new Date(),
+      user: req.user!._id,
+      userName: req.user!.name,
+      notes: 'Paiement initial',
+    });
+  }
 
   // Créer la vente
   const sale = await Sale.create({
@@ -137,8 +168,12 @@ export const createSale = asyncHandler(async (req: AuthRequest, res: Response) =
     subtotal,
     tax,
     total,
-    paymentMethod,
+    amountPaid,
+    amountDue,
+    payments,
+    paymentStatus,
     status: 'completed',
+    dueDate: dueDate ? new Date(dueDate) : undefined,
     user: req.user!._id,
     userName: req.user!.name,
     notes,
@@ -163,6 +198,93 @@ export const createSale = asyncHandler(async (req: AuthRequest, res: Response) =
   });
 });
 
+// @desc    Add payment to sale
+// @route   POST /api/sales/:id/payments
+// @access  Private (admin, gestionnaire, vendeur)
+export const addPayment = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { amount, paymentMethod, notes } = req.body;
+
+  const sale = await Sale.findById(req.params.id);
+
+  if (!sale) {
+    return res.status(404).json({
+      success: false,
+      message: 'Vente non trouvée',
+    });
+  }
+
+  if (sale.paymentStatus === 'paid') {
+    return res.status(400).json({
+      success: false,
+      message: 'Cette vente est déjà entièrement payée',
+    });
+  }
+
+  if (amount <= 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'Le montant doit être supérieur à 0',
+    });
+  }
+
+  if (amount > sale.amountDue) {
+    return res.status(400).json({
+      success: false,
+      message: `Le montant ne peut pas dépasser le montant dû (${sale.amountDue} GNF)`,
+    });
+  }
+
+  // Ajouter le paiement
+  sale.payments.push({
+    amount,
+    paymentMethod,
+    date: new Date(),
+    notes,
+    user: req.user!._id,
+    userName: req.user!.name,
+  });
+
+  // Mettre à jour les montants
+  sale.amountPaid += amount;
+  sale.amountDue -= amount;
+
+  // Mettre à jour le statut de paiement
+  if (sale.amountDue <= 0) {
+    sale.paymentStatus = 'paid';
+  } else {
+    sale.paymentStatus = 'partial';
+  }
+
+  await sale.save();
+
+  res.json({
+    success: true,
+    message: 'Paiement enregistré avec succès',
+    data: sale,
+  });
+});
+
+// @desc    Get sales with outstanding payments (créances)
+// @route   GET /api/sales/outstanding
+// @access  Private
+export const getOutstandingSales = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const sales = await Sale.find({
+    paymentStatus: { $in: ['unpaid', 'partial'] },
+    status: 'completed',
+  })
+    .populate('client', 'name phone')
+    .sort({ dueDate: 1, createdAt: -1 });
+
+  const totalOutstanding = sales.reduce((sum, sale) => sum + sale.amountDue, 0);
+
+  res.json({
+    success: true,
+    count: sales.length,
+    totalOutstanding,
+    data: sales,
+  });
+});
+
 // @desc    Update sale
 // @route   PUT /api/sales/:id
 // @access  Private (admin, gestionnaire)
@@ -176,10 +298,11 @@ export const updateSale = asyncHandler(async (req: AuthRequest, res: Response) =
     });
   }
 
-  // On peut seulement modifier le statut et les notes
-  const { status, notes } = req.body;
+  // On peut seulement modifier le statut, la date d'échéance et les notes
+  const { status, dueDate, notes } = req.body;
 
   if (status) sale.status = status;
+  if (dueDate) sale.dueDate = new Date(dueDate);
   if (notes !== undefined) sale.notes = notes;
 
   await sale.save();
@@ -237,10 +360,11 @@ export const getSalesStats = asyncHandler(async (req: AuthRequest, res: Response
 
   const thisMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
-  const [todaySales, monthSales, totalSales] = await Promise.all([
+  const [todaySales, monthSales, totalSales, outstandingSales] = await Promise.all([
     Sale.find({ createdAt: { $gte: today }, status: 'completed' }),
     Sale.find({ createdAt: { $gte: thisMonth }, status: 'completed' }),
     Sale.find({ status: 'completed' }),
+    Sale.find({ paymentStatus: { $in: ['unpaid', 'partial'] }, status: 'completed' }),
   ]);
 
   const todayTotal = todaySales.reduce((sum, sale) => sum + sale.total, 0);
@@ -248,6 +372,7 @@ export const getSalesStats = asyncHandler(async (req: AuthRequest, res: Response
   const averageBasket = totalSales.length > 0 
     ? totalSales.reduce((sum, sale) => sum + sale.total, 0) / totalSales.length 
     : 0;
+  const totalOutstanding = outstandingSales.reduce((sum, sale) => sum + sale.amountDue, 0);
 
   res.json({
     success: true,
@@ -257,6 +382,8 @@ export const getSalesStats = asyncHandler(async (req: AuthRequest, res: Response
       monthCount: monthSales.length,
       monthTotal,
       averageBasket,
+      outstandingCount: outstandingSales.length,
+      totalOutstanding,
     },
   });
 });

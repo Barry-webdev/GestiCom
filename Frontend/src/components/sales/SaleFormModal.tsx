@@ -32,7 +32,9 @@ import { productService } from "@/services/product.service";
 
 const saleSchema = z.object({
   client: z.string().min(1, "Veuillez sélectionner un client"),
+  initialPayment: z.number().min(0, "Le montant doit être positif"),
   paymentMethod: z.string().min(1, "Veuillez sélectionner un mode de paiement"),
+  dueDate: z.string().optional(),
 });
 
 type SaleFormData = z.infer<typeof saleSchema>;
@@ -91,7 +93,9 @@ export function SaleFormModal({ open, onOpenChange, onSubmit }: SaleFormModalPro
     resolver: zodResolver(saleSchema),
     defaultValues: {
       client: "",
+      initialPayment: 0,
       paymentMethod: "",
+      dueDate: "",
     },
   });
 
@@ -302,6 +306,32 @@ export function SaleFormModal({ open, onOpenChange, onSubmit }: SaleFormModalPro
                 )}
               />
 
+              {/* Montant payé */}
+              <FormField
+                control={form.control}
+                name="initialPayment"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Montant payé maintenant (GNF)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min="0"
+                        max={totalAmount}
+                        placeholder="0"
+                        {...field}
+                        onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                      />
+                    </FormControl>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Total: {formatPrice(totalAmount)} | 
+                      Reste à payer: {formatPrice(Math.max(0, totalAmount - (form.watch('initialPayment') || 0)))}
+                    </p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               {/* Mode de paiement */}
               <FormField
                 control={form.control}
@@ -327,6 +357,30 @@ export function SaleFormModal({ open, onOpenChange, onSubmit }: SaleFormModalPro
                   </FormItem>
                 )}
               />
+
+              {/* Date d'échéance (si paiement partiel) */}
+              {form.watch('initialPayment') < totalAmount && totalAmount > 0 && (
+                <FormField
+                  control={form.control}
+                  name="dueDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Date d'échéance (optionnel)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="date"
+                          {...field}
+                          min={new Date().toISOString().split('T')[0]}
+                        />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Date limite pour le paiement du reste
+                      </p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               {/* Buttons */}
               <div className="flex flex-col-reverse sm:flex-row gap-3 pt-4">

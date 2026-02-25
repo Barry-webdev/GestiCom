@@ -43,23 +43,45 @@ export interface Supplier {
 }
 
 // Sale types
+export interface Payment {
+  _id?: string;
+  amount: number;
+  paymentMethod: string;
+  date: string;
+  notes?: string;
+  user: string;
+  userName: string;
+}
+
 export interface Sale {
+  _id?: string;
   id: string;
+  saleId?: string;
   date: string;
   time?: string;
   client: string;
+  clientName?: string;
   products: number;
   total: number;
+  amountPaid?: number;
+  amountDue?: number;
+  payments?: Payment[];
+  paymentStatus?: 'paid' | 'partial' | 'unpaid';
   status: "completed" | "pending" | "cancelled";
   payment: string;
   items?: SaleItem[];
   user?: string;
+  userName?: string;
   notes?: string;
+  dueDate?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface SaleItem {
   id: number | string;
   product: string;
+  productName?: string;
   quantity: number;
   unit: string;
   price: number;
