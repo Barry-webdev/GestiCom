@@ -8,12 +8,20 @@ export interface SaleItem {
 export interface SaleFormData {
   client: string;
   items: SaleItem[];
+  initialPayment?: number;
+  paymentMethod: string;
+  dueDate?: string;
+  notes?: string;
+}
+
+export interface PaymentData {
+  amount: number;
   paymentMethod: string;
   notes?: string;
 }
 
 export const saleService = {
-  async getAll(params?: { search?: string; status?: string; startDate?: string; endDate?: string }) {
+  async getAll(params?: { search?: string; status?: string; paymentStatus?: string; startDate?: string; endDate?: string }) {
     const response = await api.get('/sales', { params });
     return response.data;
   },
@@ -28,7 +36,7 @@ export const saleService = {
     return response.data;
   },
 
-  async update(id: string, data: { status?: string; notes?: string }) {
+  async update(id: string, data: { status?: string; dueDate?: string; notes?: string }) {
     const response = await api.put(`/sales/${id}`, data);
     return response.data;
   },
@@ -40,6 +48,16 @@ export const saleService = {
 
   async getStats() {
     const response = await api.get('/sales/stats/summary');
+    return response.data;
+  },
+
+  async getOutstanding() {
+    const response = await api.get('/sales/outstanding');
+    return response.data;
+  },
+
+  async addPayment(id: string, data: PaymentData) {
+    const response = await api.post(`/sales/${id}/payments`, data);
     return response.data;
   },
 };
