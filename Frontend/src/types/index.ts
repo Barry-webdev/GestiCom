@@ -62,6 +62,8 @@ export interface Sale {
   client: string;
   clientName?: string;
   products: number;
+  subtotal?: number;
+  tax?: number;
   total: number;
   amountPaid?: number;
   amountDue?: number;

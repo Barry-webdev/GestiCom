@@ -119,7 +119,7 @@ export const generateInvoicePDF = (data: InvoiceData) => {
       fontSize: 10,
       fontStyle: 'bold',
     },
-    bodyStyles: {
+    styles: {
       fontSize: 9,
     },
     columnStyles: {
@@ -190,7 +190,7 @@ export const generateInvoicePDF = (data: InvoiceData) => {
         fontSize: 9,
         fontStyle: 'bold',
       },
-      bodyStyles: {
+      styles: {
         fontSize: 8,
       },
       columnStyles: {
