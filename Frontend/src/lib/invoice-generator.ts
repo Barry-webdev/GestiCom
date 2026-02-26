@@ -22,6 +22,15 @@ export const generateInvoicePDF = (data: InvoiceData) => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   
+  // Validation des données
+  if (!data.sale || !data.company || !data.client) {
+    throw new Error("Données manquantes pour générer la facture");
+  }
+
+  if (!data.sale.items || data.sale.items.length === 0) {
+    throw new Error("Aucun article dans la vente");
+  }
+  
   // Couleurs
   const primaryColor: [number, number, number] = [28, 42, 71]; // Navy Blue
   const accentColor: [number, number, number] = [245, 158, 11]; // Gold
@@ -50,7 +59,8 @@ export const generateInvoicePDF = (data: InvoiceData) => {
   
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.text(`N° ${data.sale.saleId || data.sale.id}`, pageWidth - 20, 32, { align: 'right' });
+  const saleId = data.sale.saleId || data.sale.id || 'N/A';
+  doc.text(`N° ${saleId}`, pageWidth - 20, 32, { align: 'right' });
   
   yPos = 50;
 
@@ -85,7 +95,8 @@ export const generateInvoicePDF = (data: InvoiceData) => {
   doc.text('INFORMATIONS', pageWidth - 100, yPos + 7);
   
   doc.setFont('helvetica', 'normal');
-  doc.text(`Date: ${new Date(data.sale.createdAt || data.sale.date).toLocaleDateString('fr-FR')}`, pageWidth - 100, yPos + 14);
+  const saleDate = data.sale.createdAt || data.sale.date || new Date().toISOString();
+  doc.text(`Date: ${new Date(saleDate).toLocaleDateString('fr-FR')}`, pageWidth - 100, yPos + 14);
   doc.text(`Vendeur: ${data.sale.userName || data.sale.user || 'N/A'}`, pageWidth - 100, yPos + 20);
   
   // Statut de paiement
@@ -102,10 +113,10 @@ export const generateInvoicePDF = (data: InvoiceData) => {
   yPos += 5;
 
   const tableData = data.sale.items?.map((item: any) => [
-    item.productName || item.product,
-    `${item.quantity} ${item.unit}`,
-    formatPrice(item.price),
-    formatPrice(item.total),
+    item.productName || item.product || 'Produit',
+    `${item.quantity || 0} ${item.unit || ''}`,
+    formatPrice(item.price || 0),
+    formatPrice(item.total || 0),
   ]) || [];
 
   autoTable(doc, {
@@ -145,7 +156,7 @@ export const generateInvoicePDF = (data: InvoiceData) => {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   doc.text('Sous-total:', boxX + 5, yPos + 8);
-  doc.text(formatPrice(data.sale.total), boxX + boxWidth - 5, yPos + 8, { align: 'right' });
+  doc.text(formatPrice(data.sale.subtotal || data.sale.total || 0), boxX + boxWidth - 5, yPos + 8, { align: 'right' });
   
   if (data.sale.tax && data.sale.tax > 0) {
     doc.text('TVA:', boxX + 5, yPos + 15);
@@ -159,7 +170,7 @@ export const generateInvoicePDF = (data: InvoiceData) => {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
   doc.text('TOTAL:', boxX + 5, yPos + 26);
-  doc.text(formatPrice(data.sale.total), boxX + boxWidth - 5, yPos + 26, { align: 'right' });
+  doc.text(formatPrice(data.sale.total || 0), boxX + boxWidth - 5, yPos + 26, { align: 'right' });
   
   yPos += 35;
   doc.setTextColor(0, 0, 0);
@@ -273,15 +284,27 @@ export const generateInvoicePDF = (data: InvoiceData) => {
 };
 
 export const downloadInvoice = (data: InvoiceData) => {
-  const doc = generateInvoicePDF(data);
-  const fileName = `Facture_${data.sale.saleId || data.sale.id}_${data.client.name.replace(/\s+/g, '_')}.pdf`;
-  doc.save(fileName);
+  try {
+    const doc = generateInvoicePDF(data);
+    const clientName = data.client.name || 'Client';
+    const saleId = data.sale.saleId || data.sale.id || 'Vente';
+    const fileName = `Facture_${saleId}_${clientName.replace(/\s+/g, '_')}.pdf`;
+    doc.save(fileName);
+  } catch (error) {
+    console.error("Erreur lors du téléchargement:", error);
+    throw error;
+  }
 };
 
 export const printInvoice = (data: InvoiceData) => {
-  const doc = generateInvoicePDF(data);
-  doc.autoPrint();
-  window.open(doc.output('bloburl'), '_blank');
+  try {
+    const doc = generateInvoicePDF(data);
+    doc.autoPrint();
+    window.open(doc.output('bloburl'), '_blank');
+  } catch (error) {
+    console.error("Erreur lors de l'impression:", error);
+    throw error;
+  }
 };
 
 // Fonction utilitaire pour formater les prix

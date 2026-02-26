@@ -86,9 +86,18 @@ export default function SaleDetail() {
   };
 
   const handleDownloadInvoice = () => {
-    if (!saleData || !companyData) return;
+    if (!saleData) {
+      showErrorToast("Erreur", "Données de vente non disponibles");
+      return;
+    }
+
+    if (!companyData) {
+      showErrorToast("Erreur", "Données de l'entreprise non disponibles");
+      return;
+    }
 
     try {
+      console.log("Génération facture avec:", { saleData, companyData });
       downloadInvoice({
         sale: saleData,
         company: companyData,
@@ -99,14 +108,24 @@ export default function SaleDetail() {
       });
       showSuccessToast("Succès", "Facture téléchargée");
     } catch (error) {
-      showErrorToast("Erreur", "Impossible de générer la facture");
+      console.error("Erreur génération facture:", error);
+      showErrorToast("Erreur", error instanceof Error ? error.message : "Impossible de générer la facture");
     }
   };
 
   const handlePrintInvoice = () => {
-    if (!saleData || !companyData) return;
+    if (!saleData) {
+      showErrorToast("Erreur", "Données de vente non disponibles");
+      return;
+    }
+
+    if (!companyData) {
+      showErrorToast("Erreur", "Données de l'entreprise non disponibles");
+      return;
+    }
 
     try {
+      console.log("Impression facture avec:", { saleData, companyData });
       printInvoice({
         sale: saleData,
         company: companyData,
@@ -116,7 +135,8 @@ export default function SaleDetail() {
         },
       });
     } catch (error) {
-      showErrorToast("Erreur", "Impossible d'imprimer la facture");
+      console.error("Erreur impression facture:", error);
+      showErrorToast("Erreur", error instanceof Error ? error.message : "Impossible d'imprimer la facture");
     }
   };
 
