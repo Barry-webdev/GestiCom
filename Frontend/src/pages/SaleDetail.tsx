@@ -66,16 +66,28 @@ export default function SaleDetail() {
   const loadData = async () => {
     try {
       setLoading(true);
+      console.log("Chargement des données pour la vente:", id);
+      
       const [saleRes, companyRes] = await Promise.all([
         saleService.getById(id!),
         companyService.get(),
       ]);
 
+      console.log("Réponse vente:", saleRes);
+      console.log("Réponse entreprise:", companyRes);
+
       if (saleRes.success) {
+        console.log("Données vente chargées:", saleRes.data);
         setSaleData(saleRes.data);
+      } else {
+        showErrorToast("Erreur", "Impossible de charger la vente");
       }
+      
       if (companyRes.success) {
+        console.log("Données entreprise chargées:", companyRes.data);
         setCompanyData(companyRes.data);
+      } else {
+        showErrorToast("Erreur", "Impossible de charger les données de l'entreprise");
       }
     } catch (error) {
       console.error("Erreur chargement:", error);

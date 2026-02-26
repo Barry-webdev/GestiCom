@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Génération Facture</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+    <h1>Test de génération de facture</h1>
+    <button onclick="testInvoice()">Générer Facture Test</button>
+    <div id="result"></div>
+
+    <script>
+        const { jsPDF } = window.jspdf;
+
+        function testInvoice() {
+            try {
+                const doc = new jsPDF();
+                
+                // Données de test
+                const data = {
+                    sale: {
+                        saleId: "VNT-2026-0001",
+                        total: 500000,
+                        subtotal: 500000,
+                        tax: 0,
+                        amountPaid: 250000,
+                        amountDue: 250000,
+                        paymentStatus: "partial",
+                        createdAt: new Date().toISOString(),
+                        userName: "Admin Test",
+                        items: [
+                            {
+                                productName: "Riz 50kg",
+                                quantity: 10,
+                                unit: "sac",
+                                price: 50000,
+                                total: 500000
+                            }
+                        ],
+                        payments: [
+                            {
+                                date: new Date().toISOString(),
+                                amount: 250000,
+                                paymentMethod: "Espèces",
+                                notes: "Paiement initial"
+                            }
+                        ],
+                        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+                    },
+                    company: {
+                        name: "Barry & Fils",
+                        phone: "+224 622 00 00 00",
+                        address: "Pita, Guinée",
+                        email: "contact@barryetfils.gn"
+                    },
+                    client: {
+                        name: "Client Test",
+                        phone: "+224 622 11 11 11",
+                        address: "Conakry, Guinée"
+                    }
+                };
+
+                // Générer le PDF
+                doc.setFontSize(20);
+                doc.text("FACTURE TEST", 105, 20, { align: 'center' });
+                
+                doc.setFontSize(12);
+                doc.text(`N° ${data.sale.saleId}`, 20, 40);
+                doc.text(`Client: ${data.client.name}`, 20, 50);
+                doc.text(`Total: ${formatPrice(data.sale.total)}`, 20, 60);
+                doc.text(`Payé: ${formatPrice(data.sale.amountPaid)}`, 20, 70);
+                doc.text(`Reste: ${formatPrice(data.sale.amountDue)}`, 20, 80);
+
+                // Télécharger
+                doc.save('facture-test.pdf');
+                
+                document.getElementById('result').innerHTML = '<p style="color: green;">✅ Facture générée avec succès!</p>';
+            } catch (error) {
+                console.error("Erreur:", error);
+                document.getElementById('result').innerHTML = `<p style="color: red;">❌ Erreur: ${error.message}</p>`;
+            }
+        }
+
+        function formatPrice(value) {
+            return new Intl.NumberFormat('fr-GN').format(value) + ' GNF';
+        }
+    </script>
+</body>
+</html>
