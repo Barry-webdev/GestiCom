@@ -319,7 +319,9 @@ export const printInvoice = (data: InvoiceData) => {
   }
 };
 
-// Fonction utilitaire pour formater les prix
+// Fonction utilitaire pour formater les prix (avec espace insécable pour jsPDF)
 const formatPrice = (value: number): string => {
-  return new Intl.NumberFormat('fr-GN').format(value) + ' GNF';
+  // Utiliser un espace insécable (\u00A0) au lieu d'un espace normal
+  const formatted = value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '\u00A0');
+  return formatted + '\u00A0GNF';
 };
