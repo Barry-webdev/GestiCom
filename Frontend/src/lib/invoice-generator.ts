@@ -143,12 +143,14 @@ export const generateInvoicePDF = (data: InvoiceData) => {
     styles: {
       fontSize: 8,
       cellPadding: 2,
+      overflow: 'linebreak',
+      cellWidth: 'wrap',
     },
     columnStyles: {
-      0: { cellWidth: 80 },
-      1: { cellWidth: 25, halign: 'center' },
-      2: { cellWidth: 35, halign: 'right' },
-      3: { cellWidth: 35, halign: 'right' },
+      0: { cellWidth: 70 },
+      1: { cellWidth: 30, halign: 'center' },
+      2: { cellWidth: 40, halign: 'right' },
+      3: { cellWidth: 40, halign: 'right' },
     },
     margin: { left: 20, right: 20 },
   });
@@ -317,9 +319,21 @@ export const printInvoice = (data: InvoiceData) => {
   }
 };
 
-// Fonction utilitaire pour formater les prix (avec espace insécable pour jsPDF)
+// Fonction utilitaire pour formater les prix (compatible jsPDF)
 const formatPrice = (value: number): string => {
-  // Utiliser un espace insécable (\u00A0) au lieu d'un espace normal
-  const formatted = value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '\u00A0');
-  return formatted + '\u00A0GNF';
+  // Formater manuellement pour éviter les problèmes d'encodage
+  const str = value.toString();
+  const parts = [];
+  let remaining = str;
+  
+  while (remaining.length > 3) {
+    parts.unshift(remaining.slice(-3));
+    remaining = remaining.slice(0, -3);
+  }
+  
+  if (remaining.length > 0) {
+    parts.unshift(remaining);
+  }
+  
+  return parts.join(' ') + ' GNF';
 };
