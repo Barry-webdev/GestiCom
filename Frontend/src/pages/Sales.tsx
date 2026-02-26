@@ -24,6 +24,7 @@ import { SaleFormModal } from "@/components/sales/SaleFormModal";
 import { showSuccessToast, showErrorToast } from "@/lib/toast-utils";
 import { saleService } from "@/services/sale.service";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useNavigate } from "react-router-dom";
 
 const sales: any[] = [];
 
@@ -44,8 +45,22 @@ function getStatusBadge(status: string) {
   }
 }
 
+function getPaymentStatusBadge(paymentStatus: string) {
+  switch (paymentStatus) {
+    case "paid":
+      return <span className="badge-success">Payé</span>;
+    case "partial":
+      return <span className="badge-warning">Partiellement payé</span>;
+    case "unpaid":
+      return <span className="badge-destructive">Impayé</span>;
+    default:
+      return <span className="badge-muted">N/A</span>;
+  }
+}
+
 export default function Sales() {
   const permissions = usePermissions();
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [salesData, setSalesData] = useState(sales);
   const [loading, setLoading] = useState(true);
@@ -201,7 +216,7 @@ export default function Sales() {
               <TableHead className="font-semibold">Client</TableHead>
               <TableHead className="font-semibold text-center">Produits</TableHead>
               <TableHead className="font-semibold text-right">Montant</TableHead>
-              <TableHead className="font-semibold">Paiement</TableHead>
+              <TableHead className="font-semibold">Statut paiement</TableHead>
               <TableHead className="font-semibold text-center">Statut</TableHead>
               <TableHead className="font-semibold text-center">Actions</TableHead>
             </TableRow>
@@ -227,19 +242,19 @@ export default function Sales() {
                   <span className="font-semibold text-foreground">{formatPrice(sale.total)}</span>
                 </TableCell>
                 <TableCell>
-                  <span className="text-sm text-muted-foreground">{sale.paymentMethod}</span>
+                  {getPaymentStatusBadge(sale.paymentStatus)}
                 </TableCell>
                 <TableCell className="text-center">{getStatusBadge(sale.status)}</TableCell>
                 <TableCell>
                   <div className="flex items-center justify-center gap-2">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Voir détails">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8" 
+                      title="Voir détails"
+                      onClick={() => navigate(`/sales/${sale._id}`)}
+                    >
                       <Eye className="w-4 h-4 text-muted-foreground" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Facture">
-                      <FileText className="w-4 h-4 text-muted-foreground" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Reçu">
-                      <Receipt className="w-4 h-4 text-muted-foreground" />
                     </Button>
                   </div>
                 </TableCell>

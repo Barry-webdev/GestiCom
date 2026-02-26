@@ -8,7 +8,7 @@ interface InvoiceData {
     name: string;
     address: string;
     phone: string;
-    email: string;
+    email?: string;
   };
   client: {
     name: string;
@@ -24,12 +24,21 @@ export const generateInvoicePDF = (data: InvoiceData) => {
   
   // Validation des données
   if (!data.sale || !data.company || !data.client) {
+    console.error("Données manquantes:", { sale: !!data.sale, company: !!data.company, client: !!data.client });
     throw new Error("Données manquantes pour générer la facture");
   }
 
   if (!data.sale.items || data.sale.items.length === 0) {
+    console.error("Aucun article dans la vente");
     throw new Error("Aucun article dans la vente");
   }
+
+  console.log("Génération PDF avec:", {
+    saleId: data.sale.saleId || data.sale.id,
+    companyName: data.company.name,
+    clientName: data.client.name,
+    itemsCount: data.sale.items.length
+  });
   
   // Couleurs
   const primaryColor: [number, number, number] = [28, 42, 71]; // Navy Blue
@@ -274,7 +283,10 @@ export const generateInvoicePDF = (data: InvoiceData) => {
   doc.setTextColor(100, 100, 100);
   
   doc.text(data.company.name, pageWidth / 2, footerY + 5, { align: 'center' });
-  doc.text(`${data.company.phone} | ${data.company.email}`, pageWidth / 2, footerY + 10, { align: 'center' });
+  const contactInfo = data.company.email 
+    ? `${data.company.phone} | ${data.company.email}`
+    : data.company.phone;
+  doc.text(contactInfo, pageWidth / 2, footerY + 10, { align: 'center' });
   doc.text(data.company.address, pageWidth / 2, footerY + 15, { align: 'center' });
   
   doc.setFontSize(7);
