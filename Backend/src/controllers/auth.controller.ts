@@ -62,8 +62,11 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     });
   }
 
-  // Check for user - Optimisé avec lean() pour performance
-  const user = await User.findOne({ email }).select('+password').lean();
+  // Check for user - Ultra optimisé avec projection minimale
+  const user = await User.findOne({ email, status: 'active' })
+    .select('_id name email phone role status password')
+    .lean()
+    .exec();
 
   if (!user) {
     return res.status(401).json({
@@ -72,7 +75,7 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     });
   }
 
-  // Check if password matches - Utilisation directe de bcrypt pour plus de rapidité
+  // Check if password matches - Utilisation directe de bcrypt
   const bcrypt = require('bcryptjs');
   const isMatch = await bcrypt.compare(password, user.password);
 
@@ -83,20 +86,12 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     });
   }
 
-  // Check if user is active
-  if (user.status !== 'active') {
-    return res.status(401).json({
-      success: false,
-      message: 'Compte désactivé',
-    });
-  }
-
   // Generate token
   const token = generateToken(user._id.toString());
 
+  // Réponse ultra rapide sans données inutiles
   res.json({
     success: true,
-    message: 'Connexion réussie',
     data: {
       user: {
         id: user._id,

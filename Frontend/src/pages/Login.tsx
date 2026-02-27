@@ -40,18 +40,20 @@ export default function Login() {
   const handleSubmit = async (data: LoginFormData) => {
     setIsSubmitting(true);
     
-    // Feedback immédiat pour l'utilisateur
-    const startTime = Date.now();
-    
     try {
-      const response = await authService.login(data);
+      const response = await authService.login({
+        email: data.email,
+        password: data.password,
+      });
       
       if (response.success) {
-        const elapsedTime = Date.now() - startTime;
-        console.log(`⚡ Connexion ultra rapide: ${elapsedTime}ms`);
+        // Redirection immédiate sans attendre le toast
+        navigate("/", { replace: true });
         
-        showSuccessToast("Connexion réussie", `Bienvenue ${response.data.user.name}`);
-        navigate("/");
+        // Toast en arrière-plan
+        setTimeout(() => {
+          showSuccessToast("Connexion réussie", `Bienvenue ${response.data.user.name}`);
+        }, 100);
       }
     } catch (error: any) {
       console.error("Erreur de connexion:", error);
@@ -59,7 +61,6 @@ export default function Login() {
         "Erreur de connexion",
         error.response?.data?.message || "Email ou mot de passe incorrect"
       );
-    } finally {
       setIsSubmitting(false);
     }
   };
