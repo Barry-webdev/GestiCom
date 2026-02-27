@@ -171,16 +171,6 @@ export default function Login() {
               </Button>
             </form>
           </Form>
-
-          {/* Compte de test */}
-          <div className="mt-6 p-4 bg-muted/50 rounded-lg border border-border">
-            <p className="text-xs text-muted-foreground text-center mb-2">
-              Compte de test
-            </p>
-            <p className="text-sm text-foreground text-center font-mono">
-              admin@gestistock.gn / admin123
-            </p>
-          </div>
         </div>
 
         {/* Footer */}
