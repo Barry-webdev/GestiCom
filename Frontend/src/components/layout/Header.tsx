@@ -141,6 +141,8 @@ export function Header({ title, subtitle, onMenuClick }: HeaderProps) {
                         onClick={() => {
                           if (!notif.read) {
                             markAsRead(notif._id);
+                            // Fermer le popover après marquage
+                            setTimeout(() => setNotifOpen(false), 300);
                           }
                         }}
                       >

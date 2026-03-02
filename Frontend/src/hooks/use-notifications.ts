@@ -8,7 +8,8 @@ export function useNotifications() {
 
   const loadNotifications = async () => {
     try {
-      const response = await notificationService.getAll(false);
+      // Charger uniquement les notifications non lues
+      const response = await notificationService.getAll(true);
       if (response.success) {
         setNotifications(response.data);
         setUnreadCount(response.unreadCount);
