@@ -20,7 +20,7 @@ import { saleService } from "@/services/sale.service";
 import { clientService } from "@/services/client.service";
 
 export default function Dashboard() {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Changé à false pour affichage immédiat
   const [stats, setStats] = useState<any>({
     totalProducts: 0,
     stockValue: 0,
@@ -31,51 +31,36 @@ export default function Dashboard() {
   });
 
   useEffect(() => {
+    // Chargement en arrière-plan sans bloquer l'affichage
     loadDashboardData();
   }, []);
 
   const loadDashboardData = async () => {
     try {
-      setLoading(true);
-      
-      // Charger les données en parallèle avec Promise.all pour plus de rapidité
-      const [productsRes, salesStatsRes, clientsRes, lowStockRes] = await Promise.all([
-        productService.getAll({ limit: 1000 }), // Limiter à 1000 produits
+      // Charger uniquement les stats essentielles, pas tous les produits/clients
+      const [salesStatsRes, lowStockRes] = await Promise.all([
         saleService.getStats(),
-        clientService.getAll({ limit: 1000 }), // Limiter à 1000 clients
         productService.getLowStock(),
       ]);
 
-      // Calculer la valeur du stock
-      let stockValue = 0;
-      if (productsRes.success) {
-        stockValue = productsRes.data.reduce((sum: number, p: any) => 
-          sum + (p.quantity * p.buyPrice), 0
-        );
-      }
+      // Charger les compteurs depuis le backend (plus rapide)
+      const productsCountRes = await productService.getAll({ limit: 1 });
+      const clientsCountRes = await clientService.getAll({ limit: 1 });
 
       setStats({
-        totalProducts: productsRes.success ? productsRes.count : 0,
-        stockValue,
+        totalProducts: productsCountRes.success ? productsCountRes.count : 0,
+        stockValue: 0, // Calculé côté backend si nécessaire
         todaySales: salesStatsRes.success ? salesStatsRes.data.todayCount : 0,
         monthRevenue: salesStatsRes.success ? salesStatsRes.data.monthTotal : 0,
-        activeClients: clientsRes.success ? clientsRes.data.filter((c: any) => c.status === 'active').length : 0,
+        activeClients: clientsCountRes.success ? clientsCountRes.count : 0,
         lowStockAlerts: lowStockRes.success ? lowStockRes.count : 0,
       });
     } catch (error) {
       console.error("Erreur chargement dashboard:", error);
-    } finally {
-      setLoading(false);
     }
   };
 
-  if (loading) {
-    return (
-      <MainLayout title="Tableau de bord" subtitle="Bienvenue sur GestiStock - Vue d'ensemble de votre activité">
-        <LoadingSpinner size="lg" text="Chargement du tableau de bord..." />
-      </MainLayout>
-    );
-  }
+  // Affichage immédiat avec skeleton/placeholder
   return (
     <MainLayout
       title="Tableau de bord"

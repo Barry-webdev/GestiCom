@@ -47,13 +47,8 @@ export default function Login() {
       });
       
       if (response.success) {
-        // Redirection immédiate sans attendre le toast
-        navigate("/", { replace: true });
-        
-        // Toast en arrière-plan
-        setTimeout(() => {
-          showSuccessToast("Connexion réussie", `Bienvenue ${response.data.user.name}`);
-        }, 100);
+        // Redirection ultra rapide avec window.location (plus rapide que navigate)
+        window.location.href = "/";
       }
     } catch (error: any) {
       console.error("Erreur de connexion:", error);
