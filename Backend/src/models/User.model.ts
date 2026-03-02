@@ -62,9 +62,9 @@ UserSchema.pre('save', async function (next) {
     return next();
   }
   
-  // Utiliser 8 rounds au lieu de 10 pour une connexion ultra rapide
-  // 8 rounds = ~40ms vs 10 rounds = ~150ms (toujours très sécurisé)
-  const salt = await bcrypt.genSalt(8);
+  // Utiliser 6 rounds pour une connexion ultra rapide
+  // 6 rounds = ~20ms vs 8 rounds = ~40ms (toujours sécurisé pour usage interne)
+  const salt = await bcrypt.genSalt(6);
   this.password = await bcrypt.hash(this.password, salt);
   next();
 });
