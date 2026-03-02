@@ -20,7 +20,6 @@ import { saleService } from "@/services/sale.service";
 import { clientService } from "@/services/client.service";
 
 export default function Dashboard() {
-  const [loading, setLoading] = useState(false); // Changé à false pour affichage immédiat
   const [stats, setStats] = useState<any>({
     totalProducts: 0,
     stockValue: 0,
@@ -31,23 +30,36 @@ export default function Dashboard() {
   });
 
   useEffect(() => {
-    // Chargement en arrière-plan sans bloquer l'affichage
     loadDashboardData();
   }, []);
 
   const loadDashboardData = async () => {
     try {
-      // Charger uniquement les stats essentielles, pas tous les produits/clients
-      const [salesStatsRes, lowStockRes] = await Promise.all([
+      const [salesStatsRes, lowStockRes, productsCountRes, clientsCountRes] = await Promise.all([
         saleService.getStats(),
         productService.getLowStock(),
+        productService.getAll({ limit: 1 }),
+        clientService.getAll({ limit: 1 }),
       ]);
 
-      // Charger les compteurs depuis le backend (plus rapide)
-      const productsCountRes = await productService.getAll({ limit: 1 });
-      const clientsCountRes = await clientService.getAll({ limit: 1 });
-
       setStats({
+        totalProducts: productsCountRes.success ? productsCountRes.count : 0,
+        stockValue: 0,
+        todaySales: salesStatsRes.success ? salesStatsRes.data.todayCount : 0,
+        monthRevenue: salesStatsRes.success ? salesStatsRes.data.monthTotal : 0,
+        activeClients: clientsCountRes.success ? clientsCountRes.count : 0,
+        lowStockAlerts: lowStockRes.success ? lowStockRes.count : 0,
+      });
+    } catch (error) {
+      console.error("Erreur chargement dashboard:", error);
+    }
+  };
+
+  return (
+    <MainLayout
+      title="Tableau de bord"
+      subtitle="Bienvenue sur GestiStock - Vue d'ensemble de votre activité"
+    >
         totalProducts: productsCountRes.success ? productsCountRes.count : 0,
         stockValue: 0, // Calculé côté backend si nécessaire
         todaySales: salesStatsRes.success ? salesStatsRes.data.todayCount : 0,
