@@ -60,24 +60,6 @@ export default function Dashboard() {
       title="Tableau de bord"
       subtitle="Bienvenue sur GestiStock - Vue d'ensemble de votre activité"
     >
-        totalProducts: productsCountRes.success ? productsCountRes.count : 0,
-        stockValue: 0, // Calculé côté backend si nécessaire
-        todaySales: salesStatsRes.success ? salesStatsRes.data.todayCount : 0,
-        monthRevenue: salesStatsRes.success ? salesStatsRes.data.monthTotal : 0,
-        activeClients: clientsCountRes.success ? clientsCountRes.count : 0,
-        lowStockAlerts: lowStockRes.success ? lowStockRes.count : 0,
-      });
-    } catch (error) {
-      console.error("Erreur chargement dashboard:", error);
-    }
-  };
-
-  // Affichage immédiat avec skeleton/placeholder
-  return (
-    <MainLayout
-      title="Tableau de bord"
-      subtitle="Bienvenue sur GestiStock - Vue d'ensemble de votre activité"
-    >
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
         <StatCard
