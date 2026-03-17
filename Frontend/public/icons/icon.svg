@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Fond Navy Blue -->
+  <rect width="512" height="512" rx="80" fill="#1C2A47"/>
+  
+  <!-- Entrepôt / Warehouse stylisé en Gold -->
+  <!-- Toit -->
+  <polygon points="256,80 80,200 432,200" fill="#F59E0B"/>
+  <!-- Corps du bâtiment -->
+  <rect x="110" y="200" width="292" height="200" fill="#F59E0B"/>
+  <!-- Porte centrale -->
+  <rect x="206" y="280" width="100" height="120" fill="#1C2A47"/>
+  <!-- Fenêtres -->
+  <rect x="140" y="230" width="60" height="50" rx="5" fill="#1C2A47"/>
+  <rect x="312" y="230" width="60" height="50" rx="5" fill="#1C2A47"/>
+  <!-- Ligne de sol -->
+  <rect x="80" y="395" width="352" height="12" rx="6" fill="#F59E0B" opacity="0.6"/>
+  <!-- Texte GS -->
+  <text x="256" y="470" font-family="Arial Black, sans-serif" font-size="52" font-weight="900" fill="#F59E0B" text-anchor="middle">GS</text>
+</svg>

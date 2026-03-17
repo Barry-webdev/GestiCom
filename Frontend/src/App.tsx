@@ -17,6 +17,7 @@ import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import { authService } from "./services/auth.service";
+import { InstallPWA } from "./components/shared/InstallPWA";
 
 // Configuration optimisée de React Query pour des performances maximales
 const queryClient = new QueryClient({
@@ -42,6 +43,7 @@ const App = () => {
       <TooltipProvider>
         <Toaster />
         <Sonner position="top-right" />
+        <InstallPWA />
         <BrowserRouter>
           <Routes>
             {/* Route de connexion - redirige vers dashboard si déjà connecté */}
