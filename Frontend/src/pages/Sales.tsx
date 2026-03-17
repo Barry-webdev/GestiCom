@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,14 +17,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Search, Calendar, Eye, FileText, Receipt, ShoppingCart } from "lucide-react";
+import { Plus, Search, Calendar, Eye, ShoppingCart } from "lucide-react";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { SaleFormModal } from "@/components/sales/SaleFormModal";
 import { showSuccessToast, showErrorToast } from "@/lib/toast-utils";
 import { saleService } from "@/services/sale.service";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useNavigate } from "react-router-dom";
+import { useCachedData } from "@/hooks/use-cached-data";
+import { invalidateCache } from "@/lib/api";
 
 const sales: any[] = [];
 
@@ -62,44 +64,28 @@ export default function Sales() {
   const permissions = usePermissions();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
-  const [salesData, setSalesData] = useState(sales);
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState<any>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Charger les ventes et stats depuis l'API
-  useEffect(() => {
-    loadSales();
-    loadStats();
-  }, []);
+  // Charger ventes + stats en parallèle avec cache
+  const { data: salesData, loading: loadingSales, refresh: refreshSales } = useCachedData<any[]>(
+    'sales',
+    async () => {
+      const res = await saleService.getAll();
+      return res.success ? res.data : [];
+    },
+    { staleTime: 30_000 }
+  );
 
-  const loadSales = async () => {
-    try {
-      setLoading(true);
-      const response = await saleService.getAll();
-      if (response.success) {
-        setSalesData(response.data);
-      }
-    } catch (error: any) {
-      console.error("Erreur lors du chargement:", error);
-      showErrorToast("Erreur", "Impossible de charger les ventes");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: stats, refresh: refreshStats } = useCachedData<any>(
+    'sales-stats',
+    async () => {
+      const res = await saleService.getStats();
+      return res.success ? res.data : null;
+    },
+    { staleTime: 30_000 }
+  );
 
-  const loadStats = async () => {
-    try {
-      const response = await saleService.getStats();
-      if (response.success) {
-        setStats(response.data);
-      }
-    } catch (error: any) {
-      console.error("Erreur stats:", error);
-    }
-  };
-
-  const filteredSales = salesData.filter((sale) =>
+  const filteredSales = (salesData ?? []).filter((sale) =>
     sale.saleId?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     sale.clientName?.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -109,18 +95,19 @@ export default function Sales() {
       const response = await saleService.create(data);
       if (response.success) {
         showSuccessToast("Succès", "Vente créée avec succès");
-        loadSales();
-        loadStats();
+        invalidateCache('sales');
+        refreshSales();
+        refreshStats();
       }
     } catch (error: any) {
       showErrorToast("Erreur", error.response?.data?.message || "Impossible de créer la vente");
     }
   };
 
-  if (loading) {
+  if (loadingSales) {
     return (
       <MainLayout title="Ventes" subtitle="Historique et gestion de vos transactions commerciales">
-        <LoadingSpinner size="lg" text="Chargement des ventes..." />
+        <TableSkeleton />
       </MainLayout>
     );
   }

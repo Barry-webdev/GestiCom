@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,11 +21,13 @@ import { Plus, Search, Filter, Edit, Trash2, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ProductFormModal } from "@/components/products/ProductFormModal";
 import { DeleteConfirmDialog } from "@/components/shared/DeleteConfirmDialog";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { showSuccessToast, showErrorToast } from "@/lib/toast-utils";
 import { productService } from "@/services/product.service";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useCachedData } from "@/hooks/use-cached-data";
+import { invalidateCache } from "@/lib/api";
 import type { Product } from "@/types";
 
 function formatPrice(value: number) {
@@ -47,33 +49,20 @@ function getStatusBadge(status: string) {
 
 export default function Products() {
   const permissions = usePermissions();
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, loading, refresh } = useCachedData<Product[]>(
+    'products',
+    async () => {
+      const res = await productService.getAll();
+      return res.success ? res.data : [];
+    },
+    { staleTime: 60_000 }
+  );
+  const products = data ?? [];
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
-
-  // Charger les produits depuis l'API
-  useEffect(() => {
-    loadProducts();
-  }, []);
-
-  const loadProducts = async () => {
-    try {
-      setLoading(true);
-      const response = await productService.getAll();
-      if (response.success) {
-        setProducts(response.data);
-      }
-    } catch (error: any) {
-      console.error("Erreur lors du chargement:", error);
-      showErrorToast("Erreur", "Impossible de charger les produits");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Filtrer les produits
   const filteredProducts = products.filter((product) => {
@@ -101,38 +90,36 @@ export default function Products() {
   const handleSubmit = async (data: any) => {
     try {
       if (selectedProduct) {
-        // Modification
         const response = await productService.update(selectedProduct._id || selectedProduct.id.toString(), data);
         if (response.success) {
           showSuccessToast("Produit modifié", "Les modifications ont été enregistrées");
-          loadProducts();
+          invalidateCache('products');
+          refresh();
         }
       } else {
-        // Création
         const response = await productService.create(data);
         if (response.success) {
           showSuccessToast("Produit ajouté", "Le produit a été ajouté au catalogue");
-          loadProducts();
+          invalidateCache('products');
+          refresh();
         }
       }
     } catch (error: any) {
-      console.error("Erreur:", error);
       showErrorToast("Erreur", error.response?.data?.message || "Une erreur est survenue");
     }
   };
 
   const confirmDelete = async () => {
     if (!selectedProduct) return;
-    
     try {
       const response = await productService.delete(selectedProduct._id || selectedProduct.id.toString());
       if (response.success) {
         showSuccessToast("Produit supprimé", `${selectedProduct.name} a été supprimé`);
         setDeleteDialogOpen(false);
-        loadProducts();
+        invalidateCache('products');
+        refresh();
       }
     } catch (error: any) {
-      console.error("Erreur:", error);
       showErrorToast("Erreur", error.response?.data?.message || "Impossible de supprimer le produit");
     }
   };
@@ -140,7 +127,7 @@ export default function Products() {
   if (loading) {
     return (
       <MainLayout title="Produits" subtitle="Gérez votre catalogue de produits et vos stocks">
-        <LoadingSpinner size="lg" text="Chargement des produits..." />
+        <TableSkeleton />
       </MainLayout>
     );
   }
