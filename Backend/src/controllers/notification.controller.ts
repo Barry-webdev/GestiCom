@@ -94,12 +94,15 @@ export const getStockAlerts = asyncHandler(async (req: AuthRequest, res: Respons
   // Produits en rupture
   const outOfStockProducts = await Product.find({ status: 'out' }).select('name quantity unit');
 
-  // Créer des notifications pour les nouveaux produits en alerte
+  // Fenêtre de 24h pour éviter de recréer des notifications déjà vues
+  const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
   for (const product of lowStockProducts) {
+    // Ne pas recréer si une notification existe déjà dans les 24 dernières heures (lue ou non)
     const existingNotif = await Notification.findOne({
       type: 'stock_low',
       product: product._id,
-      read: false,
+      createdAt: { $gte: since24h },
     });
 
     if (!existingNotif) {
@@ -114,10 +117,11 @@ export const getStockAlerts = asyncHandler(async (req: AuthRequest, res: Respons
   }
 
   for (const product of outOfStockProducts) {
+    // Ne pas recréer si une notification existe déjà dans les 24 dernières heures (lue ou non)
     const existingNotif = await Notification.findOne({
       type: 'stock_out',
       product: product._id,
-      read: false,
+      createdAt: { $gte: since24h },
     });
 
     if (!existingNotif) {
