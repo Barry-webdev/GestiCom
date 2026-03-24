@@ -79,13 +79,27 @@ export const getSale = asyncHandler(async (req: AuthRequest, res: Response) => {
 export const createSale = asyncHandler(async (req: AuthRequest, res: Response) => {
   const { client, items, initialPayment, paymentMethod, dueDate, notes } = req.body;
 
-  // Vérifier le client
-  const clientDoc = await Client.findById(client);
-  if (!clientDoc) {
-    return res.status(404).json({
-      success: false,
-      message: 'Client non trouvé',
-    });
+  // Vérifier le client - si non fourni, utiliser/créer un client "Passage"
+  let clientDoc;
+  if (client) {
+    clientDoc = await Client.findById(client);
+    if (!clientDoc) {
+      return res.status(404).json({
+        success: false,
+        message: 'Client non trouvé',
+      });
+    }
+  } else {
+    // Client de passage (vente rapide sans client enregistré)
+    clientDoc = await Client.findOne({ name: 'Client Passage' });
+    if (!clientDoc) {
+      clientDoc = await Client.create({
+        name: 'Client Passage',
+        phone: '+224600000000',
+        address: 'Pita, Guinée',
+        status: 'active',
+      });
+    }
   }
 
   // Calculer les totaux et vérifier le stock

@@ -37,7 +37,7 @@ const productSchema = z.object({
   buyPrice: z.coerce.number().min(0, "Le prix d'achat doit être positif"),
   sellPrice: z.coerce.number().min(0, "Le prix de vente doit être positif"),
   threshold: z.coerce.number().min(0, "Le seuil doit être positif"),
-  supplier: z.string().min(1, "Veuillez sélectionner un fournisseur"),
+  supplier: z.string().optional(), // Fournisseur optionnel
 });
 
 type ProductFormData = z.infer<typeof productSchema>;
@@ -300,18 +300,20 @@ export function ProductFormModal({
               name="supplier"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Fournisseur</FormLabel>
+                  <FormLabel>Fournisseur <span className="text-muted-foreground text-xs">(optionnel)</span></FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Sélectionner un fournisseur" />
+                        <SelectValue placeholder="Sélectionner un fournisseur (optionnel)" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
                       {loadingSuppliers ? (
                         <SelectItem value="loading" disabled>Chargement...</SelectItem>
                       ) : suppliers.length === 0 ? (
-                        <SelectItem value="empty" disabled>Aucun fournisseur</SelectItem>
+                        <SelectItem value="none" disabled>
+                          Aucun fournisseur — vous pouvez en ajouter dans Fournisseurs
+                        </SelectItem>
                       ) : (
                         suppliers.map((supplier) => (
                           <SelectItem key={supplier._id} value={supplier._id}>

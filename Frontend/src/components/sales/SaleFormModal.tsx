@@ -31,7 +31,7 @@ import { clientService } from "@/services/client.service";
 import { productService } from "@/services/product.service";
 
 const saleSchema = z.object({
-  client: z.string().min(1, "Veuillez sélectionner un client"),
+  client: z.string().optional(), // Optionnel - "Client Passage" si vide
   initialPayment: z.number().min(0, "Le montant doit être positif"),
   paymentMethod: z.string().min(1, "Veuillez sélectionner un mode de paiement"),
   dueDate: z.string().optional(),
@@ -286,21 +286,30 @@ export function SaleFormModal({ open, onOpenChange, onSubmit }: SaleFormModalPro
                 name="client"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Client</FormLabel>
+                    <FormLabel>Client <span className="text-muted-foreground text-xs">(optionnel)</span></FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner un client" />
+                          <SelectValue placeholder="Client de passage (sans enregistrement)" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {clients.map((client) => (
-                          <SelectItem key={client._id} value={client._id}>
-                            {client.name}
+                        {clients.length === 0 ? (
+                          <SelectItem value="none" disabled>
+                            Aucun client — vente enregistrée comme "Client Passage"
                           </SelectItem>
-                        ))}
+                        ) : (
+                          clients.map((client) => (
+                            <SelectItem key={client._id} value={client._id}>
+                              {client.name}
+                            </SelectItem>
+                          ))
+                        )}
                       </SelectContent>
                     </Select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Si vide, la vente sera attribuée à "Client Passage"
+                    </p>
                     <FormMessage />
                   </FormItem>
                 )}

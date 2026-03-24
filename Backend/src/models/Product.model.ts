@@ -59,7 +59,7 @@ const ProductSchema = new Schema<IProduct>(
     supplier: {
       type: Schema.Types.ObjectId,
       ref: 'Supplier',
-      required: [true, 'Le fournisseur est requis'],
+      required: false, // Optionnel - on peut ajouter un produit sans fournisseur
     },
     status: {
       type: String,
