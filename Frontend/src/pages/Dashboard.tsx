@@ -14,9 +14,7 @@ import {
   ShoppingCart,
   Users,
 } from "lucide-react";
-import { productService } from "@/services/product.service";
-import { saleService } from "@/services/sale.service";
-import { clientService } from "@/services/client.service";
+import { dashboardService } from "@/services/dashboard.service";
 import { useCachedData } from "@/hooks/use-cached-data";
 
 const defaultStats = {
@@ -29,19 +27,16 @@ const defaultStats = {
 };
 
 async function fetchDashboardStats() {
-  const [salesStatsRes, lowStockRes, productsCountRes, clientsCountRes] = await Promise.all([
-    saleService.getStats(),
-    productService.getLowStock(),
-    productService.getAll({ limit: 1 }),
-    clientService.getAll({ limit: 1 }),
-  ]);
+  const res = await dashboardService.getStats();
+  if (!res.success) return defaultStats;
+  const o = res.data.overview;
   return {
-    totalProducts: productsCountRes.success ? productsCountRes.count : 0,
-    stockValue: 0,
-    todaySales: salesStatsRes.success ? salesStatsRes.data.todayCount : 0,
-    monthRevenue: salesStatsRes.success ? salesStatsRes.data.monthTotal : 0,
-    activeClients: clientsCountRes.success ? clientsCountRes.count : 0,
-    lowStockAlerts: lowStockRes.success ? lowStockRes.count : 0,
+    totalProducts: o.totalProducts ?? 0,
+    stockValue: o.stockValue ?? 0,
+    todaySales: o.todaySalesCount ?? 0,
+    monthRevenue: o.monthRevenue ?? 0,
+    activeClients: o.activeClients ?? 0,
+    lowStockAlerts: o.lowStockAlerts ?? 0,
   };
 }
 
