@@ -49,9 +49,10 @@ export default function ProductDetail() {
       if (productRes.success) setProduct(productRes.data);
       if (stockRes.success) {
         // Filtrer les mouvements liés à ce produit
-        const filtered = stockRes.data.filter(
-          (m: any) => m.product === productId || m.product?._id === productId
-        );
+        const filtered = stockRes.data.filter((m: any) => {
+          const pid = m.product?._id ?? m.product;
+          return pid?.toString() === productId;
+        });
         setMovements(filtered.slice(0, 10));
       }
     } catch (error) {
@@ -110,11 +111,21 @@ export default function ProductDetail() {
       ? { label: "Stock bas", cls: "badge-warning" }
       : { label: "En stock", cls: "badge-success" };
 
-  // Construire l'historique de stock à partir des mouvements
-  const stockHistory = movements.slice().reverse().map((m: any, i: number) => ({
-    date: new Date(m.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }),
-    quantity: m.quantityAfter ?? product.quantity,
-  }));
+  // Reconstruire l'historique de stock à rebours depuis la quantité actuelle
+  const stockHistory = (() => {
+    let qty = product.quantity;
+    const history = movements.slice().map((m: any) => {
+      // On remonte dans le temps : on annule chaque mouvement
+      const point = {
+        date: new Date(m.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }),
+        quantity: qty,
+      };
+      if (m.type === "entry") qty -= m.quantity;
+      else qty += m.quantity;
+      return point;
+    });
+    return history.reverse();
+  })();
 
   return (
     <MainLayout title="Détail du produit" subtitle="Informations complètes">
