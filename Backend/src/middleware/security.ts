@@ -14,7 +14,7 @@ export const generalLimiter = rateLimit({
 // Rate limiting strict pour les routes d'authentification
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limite à 5 tentatives de connexion
+  max: process.env.NODE_ENV === 'production' ? 10 : 100, // 10 en prod, 100 en dev
   message: 'Trop de tentatives de connexion, veuillez réessayer dans 15 minutes.',
   skipSuccessfulRequests: true, // Ne compte pas les connexions réussies
 });
