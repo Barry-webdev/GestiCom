@@ -1,35 +1,23 @@
 import { useState, useEffect } from "react";
 import { AlertTriangle, Package, TrendingDown } from "lucide-react";
-import { productService } from "@/services/product.service";
+import { dashboardService } from "@/services/dashboard.service";
 
 export function AlertsCard() {
   const [alerts, setAlerts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadAlerts();
-  }, []);
-
-  const loadAlerts = async () => {
-    try {
-      setLoading(true);
-      const response = await productService.getLowStock();
-      
-      if (response.success) {
-        const alertsList = response.data.map((product: any) => ({
-          id: product._id,
-          message: `${product.name} - Stock: ${product.quantity} ${product.unit}s`,
-          severity: product.status === 'out' ? 'high' : 'medium',
-          icon: product.status === 'out' ? Package : TrendingDown,
-        }));
-        setAlerts(alertsList);
+    dashboardService.getStats().then(res => {
+      if (res.success && res.data?.lowStockProducts) {
+        setAlerts(res.data.lowStockProducts.map((p: any) => ({
+          id: p._id,
+          message: `${p.name} — Stock: ${p.quantity} ${p.unit}s`,
+          severity: p.status === 'out' ? 'high' : 'medium',
+          icon: p.status === 'out' ? Package : TrendingDown,
+        })));
       }
-    } catch (error) {
-      console.error("Erreur chargement alertes:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    }).catch(console.error).finally(() => setLoading(false));
+  }, []);
 
   return (
     <div className="bg-card rounded-xl border border-border p-6 shadow-card animate-slide-up opacity-0 delay-300">
@@ -40,7 +28,7 @@ export function AlertsCard() {
         <div>
           <h3 className="text-lg font-semibold text-foreground">Alertes stock</h3>
           <p className="text-sm text-muted-foreground">
-            {loading ? "Chargement..." : `${alerts.length} alerte${alerts.length > 1 ? 's' : ''} active${alerts.length > 1 ? 's' : ''}`}
+            {loading ? "Chargement..." : `${alerts.length} alerte${alerts.length > 1 ? "s" : ""} active${alerts.length > 1 ? "s" : ""}`}
           </p>
         </div>
       </div>
@@ -63,11 +51,7 @@ export function AlertsCard() {
                   : "bg-warning/5 border border-warning/20"
               }`}
             >
-              <alert.icon
-                className={`w-4 h-4 ${
-                  alert.severity === "high" ? "text-destructive" : "text-warning"
-                }`}
-              />
+              <alert.icon className={`w-4 h-4 ${alert.severity === "high" ? "text-destructive" : "text-warning"}`} />
               <p className="text-sm text-foreground">{alert.message}</p>
             </div>
           ))
