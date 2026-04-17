@@ -26,6 +26,12 @@ const defaultStats = {
   lowStockAlerts: 0,
 };
 
+function formatMontant(value: number): string {
+  if (value === 0) return "0 GNF";
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1).replace(".", ",")} M GNF`;
+  return new Intl.NumberFormat("fr-GN").format(value) + " GNF";
+}
+
 async function fetchDashboardStats() {
   const res = await dashboardService.getStats();
   if (!res.success) return defaultStats;
@@ -62,8 +68,8 @@ export default function Dashboard() {
         />
         <StatCard
           title="Valeur stock"
-          value={`${(s.stockValue / 1000000).toFixed(1)}M`}
-          change="GNF"
+          value={formatMontant(s.stockValue)}
+          change="Valeur totale"
           changeType="neutral"
           icon={Banknote}
           iconColor="text-success"
@@ -80,8 +86,8 @@ export default function Dashboard() {
         />
         <StatCard
           title="CA mensuel"
-          value={`${(s.monthRevenue / 1000000).toFixed(1)}M`}
-          change="GNF"
+          value={formatMontant(s.monthRevenue)}
+          change="Ce mois"
           changeType={s.monthRevenue > 0 ? "positive" : "neutral"}
           icon={TrendingUp}
           iconColor="text-info"
