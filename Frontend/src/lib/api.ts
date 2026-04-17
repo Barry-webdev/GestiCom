@@ -26,7 +26,7 @@ export function invalidateCache(pattern?: string) {
 // Create axios instance
 const api = axios.create({
   baseURL: API_URL,
-  timeout: 15000, // 15s timeout max
+  timeout: 60000, // 60s pour gérer le cold start Render (plan gratuit)
   headers: {
     'Content-Type': 'application/json',
   },

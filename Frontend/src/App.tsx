@@ -18,6 +18,10 @@ import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import { authService } from "./services/auth.service";
 import { InstallPWA } from "./components/shared/InstallPWA";
+import { startKeepAlive } from "./lib/keep-alive";
+
+// Garder le backend Render éveillé
+startKeepAlive();
 
 // Configuration optimisée de React Query pour des performances maximales
 const queryClient = new QueryClient({
