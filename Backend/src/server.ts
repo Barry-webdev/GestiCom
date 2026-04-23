@@ -26,6 +26,8 @@ import dashboardRoutes from './routes/dashboard.routes';
 import companyRoutes from './routes/company.routes';
 import notificationRoutes from './routes/notification.routes';
 import reportRoutes from './routes/report.routes';
+import partnerRoutes from './routes/partner.routes';
+import fundEntryRoutes from './routes/fundEntry.routes';
 
 // Load environment variables
 dotenv.config();
@@ -70,6 +72,8 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/company', companyRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/partners', partnerRoutes);
+app.use('/api/fund-entries', fundEntryRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

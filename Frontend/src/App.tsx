@@ -15,6 +15,8 @@ import Suppliers from "./pages/Suppliers";
 import Stock from "./pages/Stock";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
+import FundEntries from "./pages/FundEntries";
+import Partners from "./pages/Partners";
 import NotFound from "./pages/NotFound";
 import { authService } from "./services/auth.service";
 import { InstallPWA } from "./components/shared/InstallPWA";
@@ -64,6 +66,8 @@ const App = () => {
             <Route path="/stock" element={<ProtectedRoute><Stock /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+            <Route path="/fund-entries" element={<ProtectedRoute><FundEntries /></ProtectedRoute>} />
+            <Route path="/partners" element={<ProtectedRoute><Partners /></ProtectedRoute>} />
             
             {/* Route 404 */}
             <Route path="*" element={<NotFound />} />

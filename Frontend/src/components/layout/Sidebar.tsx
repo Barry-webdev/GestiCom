@@ -11,6 +11,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Warehouse,
+  TrendingUp,
+  Wallet,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -24,6 +26,8 @@ const menuItems = [
   { icon: Users, label: "Clients", path: "/clients" },
   { icon: Truck, label: "Fournisseurs", path: "/suppliers" },
   { icon: Warehouse, label: "Stock", path: "/stock" },
+  { icon: TrendingUp, label: "Entrées de fonds", path: "/fund-entries" },
+  { icon: Wallet, label: "Partenaires", path: "/partners" },
   { icon: BarChart3, label: "Rapports", path: "/reports" },
   { icon: Settings, label: "Paramètres", path: "/settings" },
 ];
