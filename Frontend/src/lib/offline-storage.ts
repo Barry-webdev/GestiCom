@@ -121,8 +121,8 @@ export async function addPendingAction(
 // Récupérer les actions non synchronisées
 export async function getPendingActions() {
   const database = await initDB();
-  const index = database.transaction('pendingActions').store.index('by-synced');
-  return await index.getAll(false);
+  const all = await database.getAll('pendingActions');
+  return all.filter(a => !a.synced);
 }
 
 // Marquer une action comme synchronisée
