@@ -102,30 +102,27 @@ export const createSale = asyncHandler(async (req: AuthRequest, res: Response) =
     }
   }
 
-  // Calculer les totaux et vérifier le stock
+  // ✅ Charger tous les produits en une seule requête (pas de N+1)
+  const productIds = items.map((item: any) => item.product);
+  const products = await Product.find({ _id: { $in: productIds } });
+  const productMap = new Map(products.map(p => [p._id.toString(), p]));
+
+  // Vérifier stock et calculer totaux
   let subtotal = 0;
   const processedItems = [];
 
   for (const item of items) {
-    const product = await Product.findById(item.product);
-    
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: `Produit ${item.product} non trouvé`,
-      });
-    }
+    const product = productMap.get(item.product.toString());
 
+    if (!product) {
+      return res.status(404).json({ success: false, message: `Produit ${item.product} non trouvé` });
+    }
     if (product.quantity < item.quantity) {
-      return res.status(400).json({
-        success: false,
-        message: `Stock insuffisant pour ${product.name}. Disponible: ${product.quantity}`,
-      });
+      return res.status(400).json({ success: false, message: `Stock insuffisant pour ${product.name}. Disponible: ${product.quantity}` });
     }
 
     const itemTotal = product.sellPrice * item.quantity;
     subtotal += itemTotal;
-
     processedItems.push({
       product: product._id,
       productName: product.name,
@@ -134,11 +131,27 @@ export const createSale = asyncHandler(async (req: AuthRequest, res: Response) =
       price: product.sellPrice,
       total: itemTotal,
     });
-
-    // Déduire du stock
-    product.quantity -= item.quantity;
-    await product.save();
   }
+
+  // ✅ Mettre à jour tous les stocks en une seule opération bulkWrite
+  await Product.bulkWrite(
+    items.map((item: any) => ({
+      updateOne: {
+        filter: { _id: item.product },
+        update: { $inc: { quantity: -item.quantity } },
+      },
+    }))
+  );
+
+  // Recalculer les statuts après mise à jour
+  await Product.updateMany(
+    { _id: { $in: productIds }, quantity: 0 },
+    { status: 'out' }
+  );
+  await Product.updateMany(
+    { _id: { $in: productIds }, quantity: { $gt: 0 } },
+    [{ $set: { status: { $cond: [{ $lte: ['$quantity', '$threshold'] }, 'low', 'ok'] } } }]
+  );
 
   const tax = 0;
   const total = subtotal + tax;
@@ -341,14 +354,15 @@ export const deleteSale = asyncHandler(async (req: AuthRequest, res: Response) =
     });
   }
 
-  // Remettre les produits en stock
-  for (const item of sale.items) {
-    const product = await Product.findById(item.product);
-    if (product) {
-      product.quantity += item.quantity;
-      await product.save();
-    }
-  }
+  // ✅ Remettre les produits en stock en une seule opération bulkWrite
+  await Product.bulkWrite(
+    sale.items.map((item: any) => ({
+      updateOne: {
+        filter: { _id: item.product },
+        update: { $inc: { quantity: item.quantity } },
+      },
+    }))
+  );
 
   // Mettre à jour le client
   const client = await Client.findById(sale.client);

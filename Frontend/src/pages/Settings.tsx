@@ -1,39 +1,21 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Building2,
-  User,
-  Shield,
-  Bell,
-  Plus,
-  Edit,
-  Trash2,
-  Key,
-  UserCheck,
-  UserX,
-} from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Building2, User, Shield, Bell, Plus, Edit, Trash2, UserCheck, UserX } from "lucide-react";
 import { UserFormModal } from "@/components/settings/UserFormModal";
 import { DeleteConfirmDialog } from "@/components/shared/DeleteConfirmDialog";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { showSuccessToast, showErrorToast } from "@/lib/toast-utils";
 import { userService } from "@/services/user.service";
 import { companyService } from "@/services/company.service";
 import { passwordService } from "@/services/auth.service";
 import { usePermissions } from "@/hooks/use-permissions";
-
-const users: any[] = [];
+import { useQueryData } from "@/hooks/use-query-data";
 
 function getRoleBadge(role: string) {
   switch (role) {
@@ -79,40 +61,32 @@ function getStatusBadge(status: string) {
 
 export default function Settings() {
   const permissions = usePermissions();
-  const [usersData, setUsersData] = useState(users);
-  const [loading, setLoading] = useState(true);
+  const qc = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any>(null);
-  const [companyData, setCompanyData] = useState({
-    name: '',
-    phone: '',
-    address: '',
-    email: '',
-  });
   const [savingCompany, setSavingCompany] = useState(false);
-  const [passwordData, setPasswordData] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
-  });
   const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
 
-  useEffect(() => {
-    loadUsers();
-    loadCompany();
-  }, []);
+  // ✅ TanStack Query — cache 5 min, pas de rechargement inutile
+  const { data: usersData, loading } = useQueryData<any[]>(
+    'users',
+    async () => { const r = await userService.getAll(); return r.success ? r.data : []; },
+    { staleTime: 5 * 60_000 }
+  );
 
-  const loadCompany = async () => {
-    try {
-      const response = await companyService.get();
-      if (response.success) {
-        setCompanyData(response.data);
-      }
-    } catch (error: any) {
-      console.error("Erreur lors du chargement:", error);
-    }
-  };
+  const { data: companyRaw } = useQueryData<any>(
+    'company',
+    async () => { const r = await companyService.get(); return r.success ? r.data : {}; },
+    { staleTime: 10 * 60_000 }
+  );
+
+  const [companyData, setCompanyData] = useState({ name: '', phone: '', address: '', email: '' });
+  // Sync companyData quand les données arrivent
+  if (companyRaw && companyRaw.name && !companyData.name) {
+    setCompanyData({ name: companyRaw.name || '', phone: companyRaw.phone || '', address: companyRaw.address || '', email: companyRaw.email || '' });
+  }
 
   const handleSaveCompany = async () => {
     try {
@@ -120,9 +94,9 @@ export default function Settings() {
       const response = await companyService.update(companyData);
       if (response.success) {
         showSuccessToast("Entreprise mise à jour", "Les informations ont été enregistrées");
+        qc.invalidateQueries({ queryKey: ['company'] });
       }
     } catch (error: any) {
-      console.error("Erreur:", error);
       showErrorToast("Erreur", error.response?.data?.message || "Impossible de sauvegarder");
     } finally {
       setSavingCompany(false);
@@ -130,20 +104,14 @@ export default function Settings() {
   };
 
   const handleChangePassword = async () => {
-    // Validation
     if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
-      showErrorToast("Erreur", "Tous les champs sont requis");
-      return;
+      showErrorToast("Erreur", "Tous les champs sont requis"); return;
     }
-
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      showErrorToast("Erreur", "Les mots de passe ne correspondent pas");
-      return;
+      showErrorToast("Erreur", "Les mots de passe ne correspondent pas"); return;
     }
-
     if (passwordData.newPassword.length < 6) {
-      showErrorToast("Erreur", "Le mot de passe doit contenir au moins 6 caractères");
-      return;
+      showErrorToast("Erreur", "Le mot de passe doit contenir au moins 6 caractères"); return;
     }
 
     try {
@@ -169,18 +137,7 @@ export default function Settings() {
   };
 
   const loadUsers = async () => {
-    try {
-      setLoading(true);
-      const response = await userService.getAll();
-      if (response.success) {
-        setUsersData(response.data);
-      }
-    } catch (error: any) {
-      console.error("Erreur lors du chargement:", error);
-      showErrorToast("Erreur", "Impossible de charger les utilisateurs");
-    } finally {
-      setLoading(false);
-    }
+    qc.invalidateQueries({ queryKey: ['users'] });
   };
 
   const handleCreate = () => {
@@ -199,62 +156,61 @@ export default function Settings() {
   };
 
   const handleSubmit = async (data: any) => {
-    try {
-      if (selectedUser) {
-        const response = await userService.update(selectedUser._id, data);
-        if (response.success) {
-          showSuccessToast("Utilisateur modifié", "Les modifications ont été enregistrées");
-          loadUsers();
-        }
-      } else {
-        const response = await userService.create(data);
-        if (response.success) {
-          showSuccessToast("Utilisateur créé", "L'utilisateur a été créé avec succès");
-          loadUsers();
-        }
+    if (selectedUser) {
+      qc.setQueryData<any[]>(['users'], old => (old ?? []).map(u => u._id === selectedUser._id ? { ...u, ...data } : u));
+      try {
+        await userService.update(selectedUser._id, data);
+        showSuccessToast("Utilisateur modifié", "Modifications enregistrées");
+        qc.invalidateQueries({ queryKey: ['users'] });
+      } catch (e: any) {
+        qc.invalidateQueries({ queryKey: ['users'] });
+        showErrorToast("Erreur", e.response?.data?.message || "Impossible de modifier");
       }
-    } catch (error: any) {
-      console.error("Erreur:", error);
-      showErrorToast("Erreur", error.response?.data?.message || "Une erreur est survenue");
+    } else {
+      try {
+        await userService.create(data);
+        showSuccessToast("Utilisateur créé", "L'utilisateur a été créé avec succès");
+        qc.invalidateQueries({ queryKey: ['users'] });
+      } catch (e: any) {
+        showErrorToast("Erreur", e.response?.data?.message || "Une erreur est survenue");
+      }
     }
   };
 
   const confirmDelete = async () => {
     if (!selectedUser) return;
-
+    qc.setQueryData<any[]>(['users'], old => (old ?? []).filter(u => u._id !== selectedUser._id));
+    setDeleteDialogOpen(false);
     try {
-      const response = await userService.delete(selectedUser._id);
-      if (response.success) {
-        showSuccessToast("Utilisateur supprimé", `${selectedUser.name} a été supprimé`);
-        setDeleteDialogOpen(false);
-        loadUsers();
-      }
-    } catch (error: any) {
-      console.error("Erreur:", error);
-      showErrorToast("Erreur", error.response?.data?.message || "Impossible de supprimer l'utilisateur");
+      await userService.delete(selectedUser._id);
+      showSuccessToast("Utilisateur supprimé", `${selectedUser.name} a été supprimé`);
+    } catch (e: any) {
+      qc.invalidateQueries({ queryKey: ['users'] });
+      showErrorToast("Erreur", e.response?.data?.message || "Impossible de supprimer");
     }
   };
 
   const handleToggleStatus = async (user: any) => {
+    const newStatus = user.status === 'active' ? 'inactive' : 'active';
+    qc.setQueryData<any[]>(['users'], old => (old ?? []).map(u => u._id === user._id ? { ...u, status: newStatus } : u));
     try {
-      const response = await userService.toggleStatus(user._id);
-      if (response.success) {
-        showSuccessToast(
-          "Statut modifié",
-          `${user.name} a été ${user.status === 'active' ? 'désactivé' : 'activé'}`
-        );
-        loadUsers();
-      }
-    } catch (error: any) {
-      console.error("Erreur:", error);
-      showErrorToast("Erreur", error.response?.data?.message || "Impossible de modifier le statut");
+      await userService.toggleStatus(user._id);
+      showSuccessToast("Statut modifié", `${user.name} ${newStatus === 'active' ? 'activé' : 'désactivé'}`);
+    } catch (e: any) {
+      qc.invalidateQueries({ queryKey: ['users'] });
+      showErrorToast("Erreur", e.response?.data?.message || "Impossible de modifier le statut");
     }
   };
 
   if (loading) {
     return (
       <MainLayout title="Paramètres" subtitle="Configurez votre application et gérez les utilisateurs">
-        <LoadingSpinner size="lg" text="Chargement..." />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-1 space-y-6">
+            {[...Array(3)].map((_, i) => <div key={i} className="bg-card rounded-xl border border-border p-6 h-64 animate-pulse" />)}
+          </div>
+          <div className="lg:col-span-2"><TableSkeleton rows={5} columns={6} /></div>
+        </div>
       </MainLayout>
     );
   }

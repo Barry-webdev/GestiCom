@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { notificationService } from '@/services/notification.service';
 
 export function useNotifications() {
@@ -6,77 +6,55 @@ export function useNotifications() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  const loadNotifications = async () => {
+  const loadNotifications = useCallback(async () => {
     try {
-      // Charger uniquement les notifications non lues
       const response = await notificationService.getAll(true);
       if (response.success) {
         setNotifications(response.data);
         setUnreadCount(response.unreadCount);
       }
     } catch (error) {
-      console.error('Erreur chargement notifications:', error);
+      // Silencieux — pas de toast pour les notifications
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const checkAlerts = async () => {
+  const checkAlerts = useCallback(async () => {
     try {
       await notificationService.getAlerts();
-      // Recharger les notifications après vérification des alertes
-      loadNotifications();
-    } catch (error) {
-      console.error('Erreur vérification alertes:', error);
+      await loadNotifications();
+    } catch {
+      // Silencieux
     }
-  };
+  }, [loadNotifications]);
 
   const markAsRead = async (id: string) => {
-    try {
-      await notificationService.markAsRead(id);
-      loadNotifications();
-    } catch (error) {
-      console.error('Erreur marquage notification:', error);
-    }
+    // Optimistic update
+    setNotifications(prev => prev.map(n => n._id === id ? { ...n, read: true } : n));
+    setUnreadCount(prev => Math.max(0, prev - 1));
+    try { await notificationService.markAsRead(id); } catch { loadNotifications(); }
   };
 
   const markAllAsRead = async () => {
-    try {
-      await notificationService.markAllAsRead();
-      loadNotifications();
-    } catch (error) {
-      console.error('Erreur marquage toutes notifications:', error);
-    }
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    setUnreadCount(0);
+    try { await notificationService.markAllAsRead(); } catch { loadNotifications(); }
   };
 
   const deleteNotification = async (id: string) => {
-    try {
-      await notificationService.delete(id);
-      loadNotifications();
-    } catch (error) {
-      console.error('Erreur suppression notification:', error);
-    }
+    setNotifications(prev => prev.filter(n => n._id !== id));
+    try { await notificationService.delete(id); } catch { loadNotifications(); }
   };
 
   useEffect(() => {
     loadNotifications();
     checkAlerts();
 
-    // Polling toutes les 30 secondes
-    const interval = setInterval(() => {
-      checkAlerts();
-    }, 30000);
-
+    // Polling toutes les 5 minutes au lieu de 30 secondes
+    const interval = setInterval(checkAlerts, 5 * 60_000);
     return () => clearInterval(interval);
   }, []);
 
-  return {
-    notifications,
-    unreadCount,
-    loading,
-    markAsRead,
-    markAllAsRead,
-    deleteNotification,
-    refresh: loadNotifications,
-  };
+  return { notifications, unreadCount, loading, markAsRead, markAllAsRead, deleteNotification, refresh: loadNotifications };
 }

@@ -1,10 +1,8 @@
-import { ReactNode, useState, useEffect } from "react";
+import { ReactNode, useState } from "react";
 import { Sidebar } from "./Sidebar";
 import { MobileSidebar } from "./MobileSidebar";
 import { Header } from "./Header";
 import { OnlineStatusBanner } from "@/components/shared/OnlineStatusBanner";
-import { initDB } from "@/lib/offline-storage";
-import { refreshAllData } from "@/lib/sync-manager";
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -14,16 +12,6 @@ interface MainLayoutProps {
 
 export function MainLayout({ children, title, subtitle }: MainLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  useEffect(() => {
-    // Initialiser la base de données offline au chargement
-    initDB().then(() => {
-      // Rafraîchir les données si en ligne
-      if (navigator.onLine) {
-        refreshAllData();
-      }
-    });
-  }, []);
 
   return (
     <div className="min-h-screen bg-background">
