@@ -91,7 +91,11 @@ ProductSchema.pre('save', function () {
   }
 });
 
-// Index pour la recherche
+// Index pour la recherche et les performances
 ProductSchema.index({ name: 'text', category: 'text' });
+ProductSchema.index({ status: 1 });
+ProductSchema.index({ category: 1 });
+ProductSchema.index({ createdAt: -1 });
+ProductSchema.index({ supplier: 1 });
 
 export default mongoose.model<IProduct>('Product', ProductSchema);

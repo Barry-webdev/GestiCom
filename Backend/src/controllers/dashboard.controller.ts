@@ -7,174 +7,158 @@ import Client from '../models/Client.model';
 import StockMovement from '../models/StockMovement.model';
 import Supplier from '../models/Supplier.model';
 
-// @desc    Get dashboard statistics
-// @route   GET /api/dashboard/stats
-// @access  Private
 export const getDashboardStats = asyncHandler(async (req: AuthRequest, res: Response) => {
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const last7DaysStart = new Date(now);
+  last7DaysStart.setDate(last7DaysStart.getDate() - 6);
+  last7DaysStart.setHours(0, 0, 0, 0);
 
-  // Exécuter toutes les requêtes en parallèle pour optimiser les performances
+  // ✅ TOUT en parallèle — un seul round-trip MongoDB
   const [
     products,
     todaySales,
     monthSales,
-    clients,
+    activeClients,
+    vipClients,
     lowStockProducts,
-    todayStockMovements,
-    monthStockMovements,
-    suppliers,
+    todayMovements,
+    monthMovements,
+    activeSuppliers,
+    totalSuppliers,
+    last7DaysSales,        // Une seule requête pour les 7 jours
+    topProductsAgg,        // Agrégation pour top produits
+    categorySalesAgg,      // Agrégation pour catégories
+    recentSales,
   ] = await Promise.all([
-    Product.find(),
-    Sale.find({ createdAt: { $gte: startOfDay }, status: 'completed' }),
-    Sale.find({ createdAt: { $gte: startOfMonth }, status: 'completed' }),
-    Client.find(),
-    Product.find({ status: { $in: ['low', 'out'] } }),
-    StockMovement.find({ createdAt: { $gte: startOfDay } }),
-    StockMovement.find({ createdAt: { $gte: startOfMonth } }),
-    Supplier.find(),
+    // Overview
+    Product.find({}, 'quantity buyPrice status name unit').lean(),
+    Sale.countDocuments({ createdAt: { $gte: startOfDay }, status: 'completed' }),
+    Sale.aggregate([
+      { $match: { createdAt: { $gte: startOfMonth }, status: 'completed' } },
+      { $group: { _id: null, total: { $sum: '$total' }, count: { $sum: 1 } } },
+    ]),
+    Client.countDocuments({ status: 'active' }),
+    Client.countDocuments({ status: 'vip' }),
+    Product.find({ status: { $in: ['low', 'out'] } }, 'name quantity unit status').lean(),
+    StockMovement.aggregate([
+      { $match: { createdAt: { $gte: startOfDay } } },
+      { $group: { _id: '$type', count: { $sum: 1 } } },
+    ]),
+    StockMovement.aggregate([
+      { $match: { createdAt: { $gte: startOfMonth } } },
+      { $group: { _id: '$type', count: { $sum: 1 } } },
+    ]),
+    Supplier.countDocuments({ status: 'active' }),
+    Supplier.countDocuments(),
+
+    // ✅ Graphique 7 jours — UNE seule requête + groupement JS
+    Sale.find(
+      { createdAt: { $gte: last7DaysStart }, status: 'completed' },
+      'createdAt total'
+    ).lean(),
+
+    // ✅ Top produits — agrégation MongoDB (pas de N+1)
+    Sale.aggregate([
+      { $match: { status: 'completed' } },
+      { $unwind: '$items' },
+      { $group: { _id: '$items.product', name: { $first: '$items.productName' }, totalQuantity: { $sum: '$items.quantity' }, totalRevenue: { $sum: '$items.total' } } },
+      { $sort: { totalQuantity: -1 } },
+      { $limit: 5 },
+    ]),
+
+    // ✅ Catégories — agrégation MongoDB (pas de 6 requêtes séparées)
+    Sale.aggregate([
+      { $match: { status: 'completed' } },
+      { $unwind: '$items' },
+      { $lookup: { from: 'products', localField: 'items.product', foreignField: '_id', as: 'productInfo' } },
+      { $unwind: { path: '$productInfo', preserveNullAndEmptyArrays: true } },
+      { $group: { _id: '$productInfo.category', value: { $sum: '$items.total' } } },
+    ]),
+
+    // Ventes récentes
+    Sale.find({}, 'clientName total createdAt items saleId')
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .lean(),
   ]);
 
-  // Calculer les statistiques
-  const totalProducts = products.length;
-  const stockValue = products.reduce((sum, p) => sum + (p.quantity * p.buyPrice), 0);
-  
-  const todaySalesCount = todaySales.length;
-  const todaySalesTotal = todaySales.reduce((sum, s) => sum + s.total, 0);
-  
-  const monthSalesCount = monthSales.length;
-  const monthRevenue = monthSales.reduce((sum, s) => sum + s.total, 0);
-  
-  const activeClients = clients.filter(c => c.status === 'active').length;
-  const vipClients = clients.filter(c => c.status === 'vip').length;
-  
-  const lowStockAlerts = lowStockProducts.length;
-  
-  const todayEntries = todayStockMovements.filter(m => m.type === 'entry').length;
-  const todayExits = todayStockMovements.filter(m => m.type === 'exit').length;
-  
-  const monthEntries = monthStockMovements.filter(m => m.type === 'entry').length;
-  const monthExits = monthStockMovements.filter(m => m.type === 'exit').length;
-  
-  const activeSuppliers = suppliers.filter(s => s.status === 'active').length;
-  const totalSuppliers = suppliers.length;
+  // Calculs overview
+  const stockValue = products.reduce((s, p) => s + p.quantity * p.buyPrice, 0);
+  const todaySalesTotal = await Sale.aggregate([
+    { $match: { createdAt: { $gte: startOfDay }, status: 'completed' } },
+    { $group: { _id: null, total: { $sum: '$total' } } },
+  ]).then(r => r[0]?.total ?? 0);
 
-  // Ventes des 7 derniers jours pour le graphique
-  const last7Days = [];
-  for (let i = 6; i >= 0; i--) {
+  const monthData = monthSales[0] ?? { total: 0, count: 0 };
+  const todayEntry = todayMovements.find((m: any) => m._id === 'entry')?.count ?? 0;
+  const todayExit = todayMovements.find((m: any) => m._id === 'exit')?.count ?? 0;
+  const monthEntry = monthMovements.find((m: any) => m._id === 'entry')?.count ?? 0;
+  const monthExit = monthMovements.find((m: any) => m._id === 'exit')?.count ?? 0;
+
+  // ✅ Graphique 7 jours — groupement en JS (pas de boucle avec await)
+  const dayNames = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+  const last7Days = Array.from({ length: 7 }, (_, i) => {
     const date = new Date(now);
-    date.setDate(date.getDate() - i);
+    date.setDate(date.getDate() - (6 - i));
     date.setHours(0, 0, 0, 0);
-    
     const nextDate = new Date(date);
     nextDate.setDate(date.getDate() + 1);
-    
-    const daySales = await Sale.find({
-      createdAt: { $gte: date, $lt: nextDate },
-      status: 'completed',
+
+    const daySales = last7DaysSales.filter((s: any) => {
+      const d = new Date(s.createdAt);
+      return d >= date && d < nextDate;
     });
-    
-    const dayNames = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
-    
-    last7Days.push({
+
+    return {
       name: dayNames[date.getDay()],
       date: date.toISOString(),
       sales: daySales.length,
-      revenue: daySales.reduce((sum, s) => sum + s.total, 0),
-    });
-  }
+      revenue: daySales.reduce((sum: number, s: any) => sum + s.total, 0),
+    };
+  });
 
-  // Ventes par catégorie
-  const categories = ['Alimentaire', 'Quincaillerie', 'Vêtements', 'Électronique', 'Cosmétiques', 'Autres'];
-  const categorySales = await Promise.all(
-    categories.map(async (category) => {
-      const categoryProducts = products.filter(p => p.category === category);
-      const productIds = categoryProducts.map(p => p._id);
-      
-      const sales = await Sale.find({
-        'items.product': { $in: productIds },
-        status: 'completed',
-      });
-      
-      let total = 0;
-      sales.forEach(sale => {
-        sale.items.forEach((item: any) => {
-          if (productIds.some(id => id.toString() === item.product.toString())) {
-            total += item.total;
-          }
-        });
-      });
-      
-      return {
-        name: category,
-        value: total,
-        products: categoryProducts.length,
-      };
-    })
-  );
+  // ✅ Catégories formatées
+  const allCategories = ['Alimentaire', 'Quincaillerie', 'Vêtements', 'Électronique', 'Cosmétiques', 'Autres'];
+  const catMap = new Map(categorySalesAgg.map((c: any) => [c._id, c.value]));
+  const categorySales = allCategories.map(cat => ({
+    name: cat,
+    value: catMap.get(cat) ?? 0,
+    products: products.filter(p => p.category === cat).length,
+  }));
 
-  // Top 5 produits les plus vendus
-  const topProducts = await Sale.aggregate([
-    { $match: { status: 'completed' } },
-    { $unwind: '$items' },
-    {
-      $group: {
-        _id: '$items.product',
-        totalQuantity: { $sum: '$items.quantity' },
-        totalRevenue: { $sum: '$items.total' },
-      },
-    },
-    { $sort: { totalQuantity: -1 } },
-    { $limit: 5 },
-  ]);
-
-  // Peupler les informations des produits
-  const topProductsWithDetails = await Promise.all(
-    topProducts.map(async (item) => {
-      const product = await Product.findById(item._id);
-      return {
-        product: product ? { _id: product._id, name: product.name } : null,
-        quantity: item.totalQuantity,
-        revenue: item.totalRevenue,
-      };
-    })
-  );
-
-  // Ventes récentes (5 dernières)
-  const recentSales = await Sale.find()
-    .populate('client', 'name')
-    .populate('user', 'name')
-    .sort({ createdAt: -1 })
-    .limit(5);
+  // ✅ Top produits sans N+1
+  const topProducts = topProductsAgg.map((item: any) => ({
+    product: { _id: item._id, name: item.name },
+    quantity: item.totalQuantity,
+    revenue: item.totalRevenue,
+  }));
 
   res.json({
     success: true,
     data: {
       overview: {
-        totalProducts,
+        totalProducts: products.length,
         stockValue,
-        todaySalesCount,
+        todaySalesCount: todaySales,
         todaySalesTotal,
-        monthSalesCount,
-        monthRevenue,
+        monthSalesCount: monthData.count,
+        monthRevenue: monthData.total,
         activeClients,
         vipClients,
-        lowStockAlerts,
-        todayEntries,
-        todayExits,
-        monthEntries,
-        monthExits,
+        lowStockAlerts: lowStockProducts.length,
+        todayEntries: todayEntry,
+        todayExits: todayExit,
+        monthEntries: monthEntry,
+        monthExits: monthExit,
         activeSuppliers,
         totalSuppliers,
       },
-      charts: {
-        last7Days,
-        categorySales,
-      },
-      topProducts: topProductsWithDetails.filter(p => p.product !== null),
+      charts: { last7Days, categorySales },
+      topProducts,
       recentSales,
-      lowStockProducts: lowStockProducts.slice(0, 10), // Limiter à 10
+      lowStockProducts: lowStockProducts.slice(0, 10),
     },
   });
 });

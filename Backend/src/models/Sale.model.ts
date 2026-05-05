@@ -197,5 +197,7 @@ SaleSchema.index({ saleId: 1 });
 SaleSchema.index({ client: 1 });
 SaleSchema.index({ paymentStatus: 1 });
 SaleSchema.index({ createdAt: -1 });
+SaleSchema.index({ status: 1, createdAt: -1 }); // Index composé pour les filtres fréquents
+SaleSchema.index({ 'items.product': 1 });        // Pour les agrégations par produit
 
 export default mongoose.model<ISale>('Sale', SaleSchema);
