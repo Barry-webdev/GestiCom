@@ -34,7 +34,10 @@ export const getDashboardStats = asyncHandler(async (req: AuthRequest, res: Resp
   ] = await Promise.all([
     // Overview
     Product.find({}, 'quantity buyPrice status name unit').lean(),
-    Sale.countDocuments({ createdAt: { $gte: startOfDay }, status: 'completed' }),
+    Sale.aggregate([
+      { $match: { createdAt: { $gte: startOfDay }, status: 'completed' } },
+      { $group: { _id: null, total: { $sum: '$total' }, count: { $sum: 1 } } },
+    ]),
     Sale.aggregate([
       { $match: { createdAt: { $gte: startOfMonth }, status: 'completed' } },
       { $group: { _id: null, total: { $sum: '$total' }, count: { $sum: 1 } } },
@@ -84,13 +87,8 @@ export const getDashboardStats = asyncHandler(async (req: AuthRequest, res: Resp
       .lean(),
   ]);
 
-  // Calculs overview
   const stockValue = products.reduce((s, p) => s + p.quantity * p.buyPrice, 0);
-  const todaySalesTotal = await Sale.aggregate([
-    { $match: { createdAt: { $gte: startOfDay }, status: 'completed' } },
-    { $group: { _id: null, total: { $sum: '$total' } } },
-  ]).then(r => r[0]?.total ?? 0);
-
+  const todayData = todaySales[0] ?? { total: 0, count: 0 };
   const monthData = monthSales[0] ?? { total: 0, count: 0 };
   const todayEntry = todayMovements.find((m: any) => m._id === 'entry')?.count ?? 0;
   const todayExit = todayMovements.find((m: any) => m._id === 'exit')?.count ?? 0;
@@ -141,8 +139,8 @@ export const getDashboardStats = asyncHandler(async (req: AuthRequest, res: Resp
       overview: {
         totalProducts: products.length,
         stockValue,
-        todaySalesCount: todaySales,
-        todaySalesTotal,
+        todaySalesCount: todayData.count,
+        todaySalesTotal: todayData.total,
         monthSalesCount: monthData.count,
         monthRevenue: monthData.total,
         activeClients,
