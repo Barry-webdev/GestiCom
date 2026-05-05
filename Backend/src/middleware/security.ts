@@ -5,10 +5,12 @@ import helmet from 'helmet';
 // Rate limiting pour prévenir les attaques DoS et brute force
 export const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limite à 100 requêtes par IP
+  max: process.env.NODE_ENV === 'production' ? 500 : 1000,
   message: 'Trop de requêtes depuis cette IP, veuillez réessayer plus tard.',
   standardHeaders: true,
   legacyHeaders: false,
+  // Skip pour les requêtes authentifiées — utilisateurs légitimes non bloqués
+  skip: (req) => !!req.headers.authorization,
 });
 
 // Rate limiting strict pour les routes d'authentification
