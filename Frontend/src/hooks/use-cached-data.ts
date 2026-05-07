@@ -1,25 +1,31 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { getCachedData } from '@/lib/offline-storage';
 
-// Hook générique basé sur TanStack Query
-// - Affichage immédiat depuis le cache (stale-while-revalidate)
-// - Pas de spinner si données en cache
-// - Refresh en arrière-plan silencieux
+type OfflineEntity = 'products' | 'clients' | 'suppliers' | 'sales';
+
 export function useCachedData<T>(
   cacheKey: string,
   fetchFn: () => Promise<T>,
-  options?: { staleTime?: number }
+  options?: { staleTime?: number; offlineEntity?: OfflineEntity }
 ) {
-  const staleTime = options?.staleTime ?? 5 * 60_000; // 5 min par défaut
+  const staleTime = options?.staleTime ?? 5 * 60_000;
 
   const { data, isLoading, error, refetch } = useQuery<T>({
     queryKey: [cacheKey],
-    queryFn: fetchFn,
+    queryFn: async () => {
+      // Offline + entité connue → IndexedDB
+      if (!navigator.onLine && options?.offlineEntity) {
+        const cached = await getCachedData(options.offlineEntity);
+        return cached as T;
+      }
+      return fetchFn();
+    },
     staleTime,
-    gcTime: 10 * 60_000,          // Garde en mémoire 10 min
+    gcTime: 10 * 60_000,
     refetchOnWindowFocus: false,
     refetchOnMount: true,
-    placeholderData: (prev) => prev, // Garde les anciennes données pendant le refresh
-    retry: 1,
+    placeholderData: (prev) => prev,
+    retry: (failureCount) => navigator.onLine && failureCount < 1,
   });
 
   return {
@@ -30,7 +36,6 @@ export function useCachedData<T>(
   };
 }
 
-// Hook pour invalidation globale du cache
 export function useInvalidate() {
   const qc = useQueryClient();
   return (key: string) => qc.invalidateQueries({ queryKey: [key] });

@@ -40,7 +40,7 @@ export default function Products() {
       const res = await productService.getAll();
       return res.success ? res.data : [];
     },
-    { staleTime: 60_000 }
+    { staleTime: 60_000, offlineEntity: 'products' }
   );
 
   const products = data ?? [];

@@ -1,38 +1,53 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { showErrorToast } from '@/lib/toast-utils';
+import { getCachedData } from '@/lib/offline-storage';
+
+type OfflineEntity = 'products' | 'clients' | 'suppliers' | 'sales';
 
 /**
- * Hook universel pour charger des données avec cache TanStack Query.
- * - Affichage immédiat depuis le cache (stale-while-revalidate)
- * - Pas de spinner si données déjà en cache
+ * Hook universel pour charger des données avec :
+ * - Cache TanStack Query (mémoire, instantané)
+ * - Fallback IndexedDB si offline
  * - Refresh silencieux en arrière-plan
  */
 export function useQueryData<T>(
   key: string | string[],
   fetchFn: () => Promise<T>,
   options?: {
-    staleTime?: number;   // Durée avant re-fetch (défaut: 2 min)
+    staleTime?: number;
     enabled?: boolean;
+    offlineEntity?: OfflineEntity; // Si fourni, fallback IndexedDB quand offline
   }
 ) {
   const queryKey = Array.isArray(key) ? key : [key];
 
   const { data, isLoading, isFetching, error, refetch } = useQuery<T>({
     queryKey,
-    queryFn: fetchFn,
+    queryFn: async () => {
+      // Si offline et entité connue → IndexedDB
+      if (!navigator.onLine && options?.offlineEntity) {
+        const cached = await getCachedData(options.offlineEntity);
+        return cached as T;
+      }
+      return fetchFn();
+    },
     staleTime: options?.staleTime ?? 2 * 60_000,
     gcTime: 10 * 60_000,
     refetchOnWindowFocus: false,
     refetchOnMount: true,
-    placeholderData: (prev) => prev, // Garde les anciennes données pendant refresh
+    placeholderData: (prev) => prev,
     enabled: options?.enabled !== false,
-    retry: 1,
+    retry: (failureCount, error: any) => {
+      // Pas de retry si offline
+      if (!navigator.onLine) return false;
+      return failureCount < 1;
+    },
   });
 
   return {
     data: data ?? null,
-    loading: isLoading,      // true seulement au PREMIER chargement sans cache
-    refreshing: isFetching && !isLoading, // true lors du refresh silencieux
+    loading: isLoading,
+    refreshing: isFetching && !isLoading,
     error: error?.message ?? null,
     refresh: () => refetch(),
   };

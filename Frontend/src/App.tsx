@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useEffect } from "react";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
@@ -21,6 +22,8 @@ import NotFound from "./pages/NotFound";
 import { authService } from "./services/auth.service";
 import { InstallPWA } from "./components/shared/InstallPWA";
 import { startKeepAlive } from "./lib/keep-alive";
+import { preloadOfflineData, syncOfflineActions } from "./lib/offline-sync";
+import { initDB } from "./lib/offline-storage";
 
 // Garder le backend Render éveillé
 startKeepAlive();
@@ -38,7 +41,19 @@ const queryClient = new QueryClient({
 });
 
 const App = () => {
-  // Composant pour rediriger vers dashboard si déjà connecté
+  // Initialiser IndexedDB + pré-charger les données offline au démarrage
+  useEffect(() => {
+    initDB().then(() => {
+      if (authService.isAuthenticated()) {
+        preloadOfflineData(); // Alimente IndexedDB si connecté
+      }
+    });
+
+    // Synchroniser les actions en attente au retour en ligne
+    const handleOnline = () => syncOfflineActions();
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, []);
   const LoginRoute = () => {
     const isAuthenticated = authService.isAuthenticated();
     return isAuthenticated ? <Navigate to="/" replace /> : <Login />;

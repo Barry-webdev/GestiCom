@@ -40,7 +40,7 @@ export default function Suppliers() {
       const res = await supplierService.getAll();
       return res.success ? res.data : [];
     },
-    { staleTime: 2 * 60_000 }
+    { staleTime: 2 * 60_000, offlineEntity: 'suppliers' }
   );
   const suppliers = data ?? [];
 

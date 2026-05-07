@@ -41,7 +41,7 @@ export default function Clients() {
       const res = await clientService.getAll();
       return res.success ? res.data : [];
     },
-    { staleTime: 2 * 60_000 }
+    { staleTime: 2 * 60_000, offlineEntity: 'clients' }
   );
   const clients = data ?? [];
 
