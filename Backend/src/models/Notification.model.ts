@@ -45,5 +45,9 @@ const NotificationSchema = new Schema<INotification>(
 
 // Index pour les requêtes
 NotificationSchema.index({ read: 1, createdAt: -1 });
+NotificationSchema.index({ type: 1 });
+NotificationSchema.index({ product: 1 });
+// TTL — auto-suppression après 30 jours
+NotificationSchema.index({ createdAt: 1 }, { expireAfterSeconds: 30 * 24 * 3600 });
 
 export default mongoose.model<INotification>('Notification', NotificationSchema);

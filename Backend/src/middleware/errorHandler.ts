@@ -48,11 +48,14 @@ export const errorHandler = (
     stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
   });
 
+  const isProd = process.env.NODE_ENV === 'production';
+
   res.status(statusCode).json({
     success: false,
     message,
-    errors: err.errors,
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+    // Ne pas exposer les détails internes en production
+    errors: isProd ? undefined : err.errors,
+    stack: isProd ? undefined : err.stack,
   });
 };
 

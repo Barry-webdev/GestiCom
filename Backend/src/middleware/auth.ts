@@ -26,11 +26,17 @@ export const protect = async (
       });
     }
 
-    // Verify token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { id: string };
+    // Vérifier que JWT_SECRET est défini
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      return res.status(500).json({ success: false, message: 'Configuration serveur invalide' });
+    }
 
-    // Get user from token
-    const user = await User.findById(decoded.id).select('-password');
+    // Verify token
+    const decoded = jwt.verify(token, jwtSecret) as { id: string };
+
+    // Get user from token — .lean() pour la performance (pas d'hydratation Mongoose)
+    const user = await User.findById(decoded.id).select('-password').lean() as any;
 
     if (!user) {
       return res.status(401).json({

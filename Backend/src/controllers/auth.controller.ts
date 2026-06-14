@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import bcrypt from 'bcryptjs';
 import User from '../models/User.model';
 import { generateToken } from '../utils/generateToken';
 import { asyncHandler } from '../middleware/errorHandler';
@@ -75,8 +76,7 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     });
   }
 
-  // Check if password matches - Utilisation directe de bcrypt
-  const bcrypt = require('bcryptjs');
+  // Check if password matches
   const isMatch = await bcrypt.compare(password, user.password);
 
   if (!isMatch) {
@@ -110,17 +110,17 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
 // @route   GET /api/auth/me
 // @access  Private
 export const getMe = asyncHandler(async (req: any, res: Response) => {
-  const user = await User.findById(req.user.id);
-
+  // req.user est déjà injecté par le middleware protect — pas besoin de requête BDD
+  const user = req.user;
   res.json({
     success: true,
     data: {
-      id: user?._id,
-      name: user?.name,
-      email: user?.email,
-      phone: user?.phone,
-      role: user?.role,
-      status: user?.status,
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      role: user.role,
+      status: user.status,
     },
   });
 });

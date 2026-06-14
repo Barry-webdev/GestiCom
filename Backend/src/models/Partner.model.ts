@@ -35,5 +35,7 @@ const PartnerSchema = new Schema<IPartner>(
 );
 
 PartnerSchema.index({ name: 'text' });
+PartnerSchema.index({ status: 1 });
+PartnerSchema.index({ createdAt: -1 });
 
 export default mongoose.model<IPartner>('Partner', PartnerSchema);

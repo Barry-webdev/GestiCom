@@ -81,5 +81,6 @@ const StockMovementSchema = new Schema<IStockMovement>(
 StockMovementSchema.index({ product: 1 });
 StockMovementSchema.index({ createdAt: -1 });
 StockMovementSchema.index({ type: 1 });
+StockMovementSchema.index({ type: 1, createdAt: -1 }); // Index composé pour les stats
 
 export default mongoose.model<IStockMovement>('StockMovement', StockMovementSchema);

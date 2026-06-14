@@ -69,7 +69,9 @@ const SupplierSchema = new Schema<ISupplier>(
   }
 );
 
-// Index pour la recherche
+// Index pour la recherche et les performances
 SupplierSchema.index({ name: 'text', contact: 'text' });
+SupplierSchema.index({ status: 1 });
+SupplierSchema.index({ createdAt: -1 });
 
 export default mongoose.model<ISupplier>('Supplier', SupplierSchema);

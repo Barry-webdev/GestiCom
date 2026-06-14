@@ -1,139 +1,90 @@
 import { Response } from 'express';
 import Sale from '../models/Sale.model';
 import Product from '../models/Product.model';
+import Client from '../models/Client.model';
 import StockMovement from '../models/StockMovement.model';
 import { asyncHandler } from '../middleware/errorHandler';
 import { AuthRequest } from '../middleware/auth';
 
-// @desc    Get monthly sales and purchases report
+// @desc    Rapport mensuel — ventes et achats par mois
 // @route   GET /api/reports/monthly
-// @access  Private
 export const getMonthlyReport = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const { year } = req.query;
-  const selectedYear = year ? parseInt(year as string) : new Date().getFullYear();
+  const selectedYear = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
+  const startOfYear = new Date(selectedYear, 0, 1);
+  const endOfYear = new Date(selectedYear, 11, 31, 23, 59, 59);
 
-  const monthlyData = [];
+  // ✅ Une seule agrégation pour les ventes (pas de boucle)
+  const salesAgg = await Sale.aggregate([
+    { $match: { createdAt: { $gte: startOfYear, $lte: endOfYear }, status: 'completed' } },
+    { $group: { _id: { $month: '$createdAt' }, total: { $sum: '$total' }, count: { $sum: 1 } } },
+  ]);
 
-  for (let month = 0; month < 12; month++) {
-    const startDate = new Date(selectedYear, month, 1);
-    const endDate = new Date(selectedYear, month + 1, 0, 23, 59, 59);
+  // ✅ Une seule agrégation pour les achats (pas de boucle)
+  const purchasesAgg = await StockMovement.aggregate([
+    { $match: { createdAt: { $gte: startOfYear, $lte: endOfYear }, type: 'entry', reason: 'Achat' } },
+    { $lookup: { from: 'products', localField: 'product', foreignField: '_id', as: 'productInfo' } },
+    { $unwind: { path: '$productInfo', preserveNullAndEmptyArrays: true } },
+    { $group: { _id: { $month: '$createdAt' }, total: { $sum: { $multiply: ['$quantity', { $ifNull: ['$productInfo.buyPrice', 0] }] } } } },
+  ]);
 
-    // Ventes du mois
-    const sales = await Sale.find({
-      createdAt: { $gte: startDate, $lte: endDate },
-      status: 'completed',
-    });
-    const totalSales = sales.reduce((sum, sale) => sum + sale.total, 0);
+  const salesMap = new Map(salesAgg.map((s: any) => [s._id, s.total]));
+  const purchasesMap = new Map(purchasesAgg.map((p: any) => [p._id, p.total]));
+  const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
 
-    // Achats du mois (entrées de stock avec raison "Achat")
-    const purchases = await StockMovement.find({
-      createdAt: { $gte: startDate, $lte: endDate },
-      type: 'entry',
-      reason: 'Achat',
-    }).populate('product', 'buyPrice');
-
-    let totalPurchases = 0;
-    for (const movement of purchases) {
-      const product = movement.product as any;
-      if (product && product.buyPrice) {
-        totalPurchases += movement.quantity * product.buyPrice;
-      }
-    }
-
-    const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
-    
-    monthlyData.push({
-      name: monthNames[month],
-      month: month + 1,
-      ventes: totalSales,
-      achats: totalPurchases,
-      profit: totalSales - totalPurchases,
-    });
-  }
-
-  res.json({
-    success: true,
-    year: selectedYear,
-    data: monthlyData,
+  const data = monthNames.map((name, i) => {
+    const ventes = salesMap.get(i + 1) ?? 0;
+    const achats = purchasesMap.get(i + 1) ?? 0;
+    return { name, month: i + 1, ventes, achats, profit: ventes - achats };
   });
+
+  res.json({ success: true, year: selectedYear, data });
 });
 
-// @desc    Get stock evolution report
+// @desc    Évolution du stock
 // @route   GET /api/reports/stock-evolution
-// @access  Private
 export const getStockEvolution = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const { period } = req.query; // 'week' or 'month'
+  // Le stock actuel est le même pour toutes les périodes (snapshot)
+  // On retourne le stock actuel par période pour le graphique
+  const [totalStock] = await Product.aggregate([
+    { $group: { _id: null, total: { $sum: '$quantity' } } },
+  ]);
+  const stock = totalStock?.total ?? 0;
+
   const now = new Date();
-  const data = [];
+  const period = req.query.period as string;
+  const count = period === 'week' ? 4 : 12;
 
-  if (period === 'week') {
-    // 4 dernières semaines
-    for (let i = 3; i >= 0; i--) {
-      const weekStart = new Date(now);
-      weekStart.setDate(now.getDate() - (i * 7 + 7));
-      weekStart.setHours(0, 0, 0, 0);
-
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 6);
-      weekEnd.setHours(23, 59, 59, 999);
-
-      // Calculer le stock total à cette date
-      const products = await Product.find();
-      const totalStock = products.reduce((sum, p) => sum + p.quantity, 0);
-
-      data.push({
-        name: `Sem ${4 - i}`,
-        stock: totalStock,
-        date: weekEnd,
-      });
+  const data = Array.from({ length: count }, (_, i) => {
+    if (period === 'week') {
+      return { name: `Sem ${i + 1}`, stock };
     }
-  } else {
-    // 12 derniers mois
-    for (let i = 11; i >= 0; i--) {
-      const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const products = await Product.find();
-      const totalStock = products.reduce((sum, p) => sum + p.quantity, 0);
-
-      const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
-      
-      data.push({
-        name: monthNames[monthDate.getMonth()],
-        stock: totalStock,
-        month: monthDate.getMonth() + 1,
-      });
-    }
-  }
-
-  res.json({
-    success: true,
-    period: period || 'week',
-    data,
+    const monthDate = new Date(now.getFullYear(), now.getMonth() - (count - 1 - i), 1);
+    const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+    return { name: monthNames[monthDate.getMonth()], stock, month: monthDate.getMonth() + 1 };
   });
+
+  res.json({ success: true, period: period || 'week', data });
 });
 
-// @desc    Get daily report
+// @desc    Rapport journalier
 // @route   GET /api/reports/daily
-// @access  Private
 export const getDailyReport = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const { date } = req.query;
-  const selectedDate = date ? new Date(date as string) : new Date();
+  const selectedDate = req.query.date ? new Date(req.query.date as string) : new Date();
   selectedDate.setHours(0, 0, 0, 0);
-
   const endDate = new Date(selectedDate);
   endDate.setHours(23, 59, 59, 999);
 
-  // Ventes du jour
-  const sales = await Sale.find({
-    createdAt: { $gte: selectedDate, $lte: endDate },
-  }).populate('client', 'name').populate('items.product', 'name');
+  const [sales, stockMovements] = await Promise.all([
+    Sale.find({ createdAt: { $gte: selectedDate, $lte: endDate } })
+      .populate('client', 'name')
+      .populate('items.product', 'name')
+      .lean(),
+    StockMovement.find({ createdAt: { $gte: selectedDate, $lte: endDate } })
+      .populate('product', 'name')
+      .lean(),
+  ]);
 
-  const totalSales = sales.reduce((sum, sale) => sum + sale.total, 0);
-
-  // Mouvements de stock du jour
-  const stockMovements = await StockMovement.find({
-    createdAt: { $gte: selectedDate, $lte: endDate },
-  }).populate('product', 'name');
-
+  const totalSales = sales.reduce((sum, s) => sum + s.total, 0);
   const entries = stockMovements.filter(m => m.type === 'entry');
   const exits = stockMovements.filter(m => m.type === 'exit');
 
@@ -141,170 +92,116 @@ export const getDailyReport = asyncHandler(async (req: AuthRequest, res: Respons
     success: true,
     date: selectedDate,
     data: {
-      sales: {
-        count: sales.length,
-        total: totalSales,
-        items: sales,
-      },
-      stock: {
-        entries: entries.length,
-        exits: exits.length,
-        movements: stockMovements,
-      },
+      sales: { count: sales.length, total: totalSales, items: sales },
+      stock: { entries: entries.length, exits: exits.length, movements: stockMovements },
     },
   });
 });
 
-// @desc    Get product report
+// @desc    Rapport par produit — agrégation globale
 // @route   GET /api/reports/products
-// @access  Private
 export const getProductReport = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const products = await Product.find().populate('supplier', 'name');
+  const [products, salesAgg, stockAgg] = await Promise.all([
+    Product.find({}, 'name category quantity unit buyPrice sellPrice status supplier').populate('supplier', 'name').lean(),
 
-  const productData = await Promise.all(
-    products.map(async (product) => {
-      // Ventes du produit
-      const sales = await Sale.find({
-        'items.product': product._id,
-      });
+    // ✅ Une seule agrégation pour toutes les ventes par produit
+    Sale.aggregate([
+      { $unwind: '$items' },
+      { $group: { _id: '$items.product', totalSold: { $sum: '$items.quantity' }, revenue: { $sum: '$items.total' } } },
+    ]),
 
-      let totalSold = 0;
-      let revenue = 0;
+    // ✅ Une seule agrégation pour tous les mouvements par produit
+    StockMovement.aggregate([
+      { $group: { _id: { product: '$product', type: '$type' }, total: { $sum: '$quantity' } } },
+    ]),
+  ]);
 
-      sales.forEach(sale => {
-        const item = sale.items.find((i: any) => i.product.toString() === product._id.toString());
-        if (item) {
-          totalSold += item.quantity;
-          revenue += item.total;
-        }
-      });
-
-      // Mouvements de stock
-      const movements = await StockMovement.find({
-        product: product._id,
-      });
-
-      const entries = movements.filter(m => m.type === 'entry').reduce((sum, m) => sum + m.quantity, 0);
-      const exits = movements.filter(m => m.type === 'exit').reduce((sum, m) => sum + m.quantity, 0);
-
-      return {
-        _id: product._id,
-        name: product.name,
-        category: product.category,
-        currentStock: product.quantity,
-        unit: product.unit,
-        buyPrice: product.buyPrice,
-        sellPrice: product.sellPrice,
-        supplier: (product.supplier as any)?.name,
-        totalSold,
-        revenue,
-        entries,
-        exits,
-        status: product.status,
-      };
-    })
-  );
-
-  res.json({
-    success: true,
-    count: productData.length,
-    data: productData,
+  const salesMap = new Map(salesAgg.map((s: any) => [s._id.toString(), s]));
+  const stockEntries = new Map<string, number>();
+  const stockExits = new Map<string, number>();
+  stockAgg.forEach((s: any) => {
+    const key = s._id.product.toString();
+    if (s._id.type === 'entry') stockEntries.set(key, s.total);
+    else stockExits.set(key, s.total);
   });
+
+  const data = products.map(p => {
+    const id = p._id.toString();
+    const sale = salesMap.get(id);
+    return {
+      _id: p._id, name: p.name, category: p.category,
+      currentStock: p.quantity, unit: p.unit,
+      buyPrice: p.buyPrice, sellPrice: p.sellPrice,
+      supplier: (p.supplier as any)?.name,
+      totalSold: sale?.totalSold ?? 0,
+      revenue: sale?.revenue ?? 0,
+      entries: stockEntries.get(id) ?? 0,
+      exits: stockExits.get(id) ?? 0,
+      status: p.status,
+    };
+  });
+
+  res.json({ success: true, count: data.length, data });
 });
 
-// @desc    Get category report
+// @desc    Rapport par catégorie — agrégation globale
 // @route   GET /api/reports/categories
-// @access  Private
 export const getCategoryReport = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const [products, salesAgg] = await Promise.all([
+    Product.find({}, 'name category quantity sellPrice').lean(),
+
+    // ✅ Une seule agrégation avec $lookup
+    Sale.aggregate([
+      { $unwind: '$items' },
+      { $lookup: { from: 'products', localField: 'items.product', foreignField: '_id', as: 'productInfo' } },
+      { $unwind: { path: '$productInfo', preserveNullAndEmptyArrays: true } },
+      { $group: { _id: '$productInfo.category', totalSales: { $sum: '$items.quantity' }, revenue: { $sum: '$items.total' } } },
+    ]),
+  ]);
+
+  const salesMap = new Map(salesAgg.map((s: any) => [s._id, s]));
+
   const categories = ['Alimentaire', 'Quincaillerie', 'Vêtements', 'Électronique', 'Cosmétiques', 'Autres'];
-
-  const categoryData = await Promise.all(
-    categories.map(async (category) => {
-      const products = await Product.find({ category });
-      const totalStock = products.reduce((sum, p) => sum + p.quantity, 0);
-      const totalValue = products.reduce((sum, p) => sum + (p.quantity * p.sellPrice), 0);
-
-      // Ventes par catégorie
-      let totalSales = 0;
-      let revenue = 0;
-
-      for (const product of products) {
-        const sales = await Sale.find({
-          'items.product': product._id,
-        });
-
-        sales.forEach(sale => {
-          const item = sale.items.find((i: any) => i.product.toString() === product._id.toString());
-          if (item) {
-            totalSales += item.quantity;
-            revenue += item.total;
-          }
-        });
-      }
-
-      return {
-        category,
-        productCount: products.length,
-        totalStock,
-        totalValue,
-        totalSales,
-        revenue,
-      };
-    })
-  );
-
-  res.json({
-    success: true,
-    data: categoryData,
+  const data = categories.map(cat => {
+    const catProducts = products.filter(p => p.category === cat);
+    const sale = salesMap.get(cat);
+    return {
+      category: cat,
+      productCount: catProducts.length,
+      totalStock: catProducts.reduce((s, p) => s + p.quantity, 0),
+      totalValue: catProducts.reduce((s, p) => s + p.quantity * p.sellPrice, 0),
+      totalSales: sale?.totalSales ?? 0,
+      revenue: sale?.revenue ?? 0,
+    };
   });
+
+  res.json({ success: true, data });
 });
 
-// @desc    Get client report
+// @desc    Rapport clients
 // @route   GET /api/reports/clients
-// @access  Private
 export const getClientReport = asyncHandler(async (req: AuthRequest, res: Response) => {
   const { clientId } = req.query;
 
   if (clientId) {
-    // Rapport pour un client spécifique
-    const sales = await Sale.find({ client: clientId })
-      .populate('items.product', 'name')
-      .sort({ createdAt: -1 });
-
-    const totalSpent = sales.reduce((sum, sale) => sum + sale.total, 0);
-
-    res.json({
-      success: true,
-      data: {
-        salesCount: sales.length,
-        totalSpent,
-        sales,
-      },
-    });
-  } else {
-    // Rapport global des clients
-    const Client = require('../models/Client.model').default;
-    const clients = await Client.find().sort({ totalPurchases: -1 });
-
-    res.json({
-      success: true,
-      count: clients.length,
-      data: clients,
-    });
+    const [sales] = await Promise.all([
+      Sale.find({ client: clientId }).populate('items.product', 'name').sort({ createdAt: -1 }).lean(),
+    ]);
+    const totalSpent = sales.reduce((s, sale) => s + sale.total, 0);
+    return res.json({ success: true, data: { salesCount: sales.length, totalSpent, sales } });
   }
+
+  const clients = await Client.find({}, 'name phone address status totalPurchases lastPurchase').sort({ totalPurchases: -1 }).lean();
+  res.json({ success: true, count: clients.length, data: clients });
 });
 
-// @desc    Get inventory report
+// @desc    Inventaire complet
 // @route   GET /api/reports/inventory
-// @access  Private
 export const getInventoryReport = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const products = await Product.find().populate('supplier', 'name').sort({ name: 1 });
+  const products = await Product.find({}).populate('supplier', 'name').sort({ name: 1 }).lean();
 
-  const totalValue = products.reduce((sum, p) => sum + (p.quantity * p.buyPrice), 0);
-  const totalItems = products.reduce((sum, p) => sum + p.quantity, 0);
-
-  const lowStock = products.filter(p => p.status === 'low');
-  const outOfStock = products.filter(p => p.status === 'out');
+  const totalValue = products.reduce((s, p) => s + p.quantity * p.buyPrice, 0);
+  const totalItems = products.reduce((s, p) => s + p.quantity, 0);
 
   res.json({
     success: true,
@@ -312,8 +209,8 @@ export const getInventoryReport = asyncHandler(async (req: AuthRequest, res: Res
       totalProducts: products.length,
       totalItems,
       totalValue,
-      lowStockCount: lowStock.length,
-      outOfStockCount: outOfStock.length,
+      lowStockCount: products.filter(p => p.status === 'low').length,
+      outOfStockCount: products.filter(p => p.status === 'out').length,
     },
     data: products,
   });

@@ -109,18 +109,12 @@ export const createStockMovement = asyncHandler(async (req: AuthRequest, res: Re
     
     // Si c'est un achat, mettre à jour le total des achats du fournisseur
     if (reason === 'Achat' && product.supplier) {
-      console.log('🔍 Recherche du fournisseur ID:', product.supplier);
       const supplier = await Supplier.findById(product.supplier);
       if (supplier) {
         const purchaseAmount = quantity * product.buyPrice;
-        console.log('💰 Montant achat:', purchaseAmount, 'GNF');
-        console.log('📊 Total avant:', supplier.totalValue, 'GNF');
         supplier.totalValue += purchaseAmount;
         supplier.lastDelivery = new Date();
         await supplier.save();
-        console.log('✅ Total après:', supplier.totalValue, 'GNF');
-      } else {
-        console.log('❌ Fournisseur non trouvé avec ID:', product.supplier);
       }
     }
   } else {
@@ -201,23 +195,27 @@ export const deleteStockMovement = asyncHandler(async (req: AuthRequest, res: Re
 export const getStockStats = asyncHandler(async (req: AuthRequest, res: Response) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-
   const thisMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
-  const [todayEntries, todayExits, monthEntries, monthExits] = await Promise.all([
-    StockMovement.find({ createdAt: { $gte: today }, type: 'entry' }),
-    StockMovement.find({ createdAt: { $gte: today }, type: 'exit' }),
-    StockMovement.find({ createdAt: { $gte: thisMonth }, type: 'entry' }),
-    StockMovement.find({ createdAt: { $gte: thisMonth }, type: 'exit' }),
+  // ✅ Une seule agrégation avec $facet au lieu de 4 requêtes find
+  const [result] = await StockMovement.aggregate([
+    {
+      $facet: {
+        todayEntries: [{ $match: { createdAt: { $gte: today }, type: 'entry' } }, { $count: 'count' }],
+        todayExits: [{ $match: { createdAt: { $gte: today }, type: 'exit' } }, { $count: 'count' }],
+        monthEntries: [{ $match: { createdAt: { $gte: thisMonth }, type: 'entry' } }, { $count: 'count' }],
+        monthExits: [{ $match: { createdAt: { $gte: thisMonth }, type: 'exit' } }, { $count: 'count' }],
+      },
+    },
   ]);
 
   res.json({
     success: true,
     data: {
-      todayEntries: todayEntries.length,
-      todayExits: todayExits.length,
-      monthEntries: monthEntries.length,
-      monthExits: monthExits.length,
+      todayEntries: result.todayEntries[0]?.count ?? 0,
+      todayExits: result.todayExits[0]?.count ?? 0,
+      monthEntries: result.monthEntries[0]?.count ?? 0,
+      monthExits: result.monthExits[0]?.count ?? 0,
     },
   });
 });

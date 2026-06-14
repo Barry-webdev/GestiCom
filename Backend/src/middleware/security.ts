@@ -9,8 +9,11 @@ export const generalLimiter = rateLimit({
   message: 'Trop de requêtes depuis cette IP, veuillez réessayer plus tard.',
   standardHeaders: true,
   legacyHeaders: false,
-  // Skip pour les requêtes authentifiées — utilisateurs légitimes non bloqués
-  skip: (req) => !!req.headers.authorization,
+  // Clé par IP + user si authentifié pour éviter les faux positifs
+  keyGenerator: (req) => {
+    const userId = (req as any).user?._id;
+    return userId ? `user_${userId}` : req.ip || 'unknown';
+  },
 });
 
 // Rate limiting strict pour les routes d'authentification

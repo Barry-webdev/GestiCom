@@ -62,7 +62,10 @@ const ClientSchema = new Schema<IClient>(
   }
 );
 
-// Index pour la recherche
+// Index pour la recherche et les performances
 ClientSchema.index({ name: 'text', phone: 'text' });
+ClientSchema.index({ status: 1 });
+ClientSchema.index({ totalPurchases: -1 });
+ClientSchema.index({ createdAt: -1 });
 
 export default mongoose.model<IClient>('Client', ClientSchema);

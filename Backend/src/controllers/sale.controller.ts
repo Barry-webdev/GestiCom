@@ -385,33 +385,48 @@ export const deleteSale = asyncHandler(async (req: AuthRequest, res: Response) =
 export const getSalesStats = asyncHandler(async (req: AuthRequest, res: Response) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-
   const thisMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
-  const [todaySales, monthSales, totalSales, outstandingSales] = await Promise.all([
-    Sale.find({ createdAt: { $gte: today }, status: 'completed' }),
-    Sale.find({ createdAt: { $gte: thisMonth }, status: 'completed' }),
-    Sale.find({ status: 'completed' }),
-    Sale.find({ paymentStatus: { $in: ['unpaid', 'partial'] }, status: 'completed' }),
+  // ✅ Une seule agrégation $facet au lieu de 4 find + reduce
+  const [result] = await Sale.aggregate([
+    {
+      $facet: {
+        today: [
+          { $match: { createdAt: { $gte: today }, status: 'completed' } },
+          { $group: { _id: null, count: { $sum: 1 }, total: { $sum: '$total' } } },
+        ],
+        month: [
+          { $match: { createdAt: { $gte: thisMonth }, status: 'completed' } },
+          { $group: { _id: null, count: { $sum: 1 }, total: { $sum: '$total' } } },
+        ],
+        all: [
+          { $match: { status: 'completed' } },
+          { $group: { _id: null, count: { $sum: 1 }, total: { $sum: '$total' } } },
+        ],
+        outstanding: [
+          { $match: { paymentStatus: { $in: ['unpaid', 'partial'] }, status: 'completed' } },
+          { $group: { _id: null, count: { $sum: 1 }, total: { $sum: '$amountDue' } } },
+        ],
+      },
+    },
   ]);
 
-  const todayTotal = todaySales.reduce((sum, sale) => sum + sale.total, 0);
-  const monthTotal = monthSales.reduce((sum, sale) => sum + sale.total, 0);
-  const averageBasket = totalSales.length > 0 
-    ? totalSales.reduce((sum, sale) => sum + sale.total, 0) / totalSales.length 
-    : 0;
-  const totalOutstanding = outstandingSales.reduce((sum, sale) => sum + sale.amountDue, 0);
+  const todayData = result.today[0] ?? { count: 0, total: 0 };
+  const monthData = result.month[0] ?? { count: 0, total: 0 };
+  const allData = result.all[0] ?? { count: 0, total: 0 };
+  const outstandingData = result.outstanding[0] ?? { count: 0, total: 0 };
+  const averageBasket = allData.count > 0 ? allData.total / allData.count : 0;
 
   res.json({
     success: true,
     data: {
-      todayCount: todaySales.length,
-      todayTotal,
-      monthCount: monthSales.length,
-      monthTotal,
+      todayCount: todayData.count,
+      todayTotal: todayData.total,
+      monthCount: monthData.count,
+      monthTotal: monthData.total,
       averageBasket,
-      outstandingCount: outstandingSales.length,
-      totalOutstanding,
+      outstandingCount: outstandingData.count,
+      totalOutstanding: outstandingData.total,
     },
   });
 });

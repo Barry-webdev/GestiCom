@@ -46,5 +46,7 @@ const FundEntrySchema = new Schema<IFundEntry>(
 FundEntrySchema.index({ category: 1 });
 FundEntrySchema.index({ date: -1 });
 FundEntrySchema.index({ partner: 1 });
+FundEntrySchema.index({ user: 1 });
+FundEntrySchema.index({ category: 1, date: -1 }); // Index composé pour les stats par période
 
 export default mongoose.model<IFundEntry>('FundEntry', FundEntrySchema);

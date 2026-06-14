@@ -33,22 +33,13 @@ export const getNotifications = asyncHandler(async (req: AuthRequest, res: Respo
 // @route   PUT /api/notifications/:id/read
 // @access  Private
 export const markAsRead = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const notification = await Notification.findById(req.params.id);
-
-  if (!notification) {
-    return res.status(404).json({
-      success: false,
-      message: 'Notification non trouvée',
-    });
-  }
-
-  notification.read = true;
-  await notification.save();
-
-  res.json({
-    success: true,
-    data: notification,
-  });
+  const updated = await Notification.findByIdAndUpdate(
+    req.params.id,
+    { read: true },
+    { new: true }
+  );
+  if (!updated) return res.status(404).json({ success: false, message: 'Notification non trouvée' });
+  res.json({ success: true, data: updated });
 });
 
 // @desc    Mark all notifications as read
@@ -88,28 +79,36 @@ export const deleteNotification = asyncHandler(async (req: AuthRequest, res: Res
 // @route   GET /api/notifications/alerts
 // @access  Private
 export const getStockAlerts = asyncHandler(async (req: AuthRequest, res: Response) => {
-  // Produits en stock bas
-  const lowStockProducts = await Product.find({ status: 'low' }).select('name quantity unit threshold');
+  const [lowStockProducts, outOfStockProducts] = await Promise.all([
+    Product.find({ status: 'low' }, 'name quantity unit threshold').lean(),
+    Product.find({ status: 'out' }, 'name quantity unit').lean(),
+  ]);
 
-  // Produits en rupture
-  const outOfStockProducts = await Product.find({ status: 'out' }).select('name quantity unit');
-
-  // Fenêtre de 24h pour éviter de recréer des notifications déjà vues
   const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const allProducts = [...lowStockProducts, ...outOfStockProducts];
+
+  if (allProducts.length === 0) {
+    return res.json({ success: true, data: { lowStock: 0, outOfStock: 0, products: { low: [], out: [] } } });
+  }
+
+  // ✅ Une seule requête pour récupérer toutes les notifs existantes (pas de N+1)
+  const productIds = allProducts.map(p => p._id);
+  const existingNotifs = await Notification.find({
+    product: { $in: productIds },
+    createdAt: { $gte: since24h },
+  }, 'type product').lean();
+
+  const existingSet = new Set(existingNotifs.map(n => `${n.type}_${n.product}`));
+
+  // Créer les notifications manquantes en bulk
+  const toCreate = [];
 
   for (const product of lowStockProducts) {
-    // Ne pas recréer si une notification existe déjà dans les 24 dernières heures (lue ou non)
-    const existingNotif = await Notification.findOne({
-      type: 'stock_low',
-      product: product._id,
-      createdAt: { $gte: since24h },
-    });
-
-    if (!existingNotif) {
-      await Notification.create({
+    if (!existingSet.has(`stock_low_${product._id}`)) {
+      toCreate.push({
         type: 'stock_low',
         title: 'Stock bas',
-        message: `${product.name} : ${product.quantity} ${product.unit}s restants (seuil: ${product.threshold})`,
+        message: `${product.name} : ${product.quantity} ${product.unit}s restants (seuil: ${(product as any).threshold})`,
         product: product._id,
         productName: product.name,
       });
@@ -117,15 +116,8 @@ export const getStockAlerts = asyncHandler(async (req: AuthRequest, res: Respons
   }
 
   for (const product of outOfStockProducts) {
-    // Ne pas recréer si une notification existe déjà dans les 24 dernières heures (lue ou non)
-    const existingNotif = await Notification.findOne({
-      type: 'stock_out',
-      product: product._id,
-      createdAt: { $gte: since24h },
-    });
-
-    if (!existingNotif) {
-      await Notification.create({
+    if (!existingSet.has(`stock_out_${product._id}`)) {
+      toCreate.push({
         type: 'stock_out',
         title: 'Rupture de stock',
         message: `${product.name} est en rupture de stock`,
@@ -135,15 +127,16 @@ export const getStockAlerts = asyncHandler(async (req: AuthRequest, res: Respons
     }
   }
 
+  if (toCreate.length > 0) {
+    await Notification.insertMany(toCreate);
+  }
+
   res.json({
     success: true,
     data: {
       lowStock: lowStockProducts.length,
       outOfStock: outOfStockProducts.length,
-      products: {
-        low: lowStockProducts,
-        out: outOfStockProducts,
-      },
+      products: { low: lowStockProducts, out: outOfStockProducts },
     },
   });
 });
